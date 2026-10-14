@@ -1,0 +1,5 @@
+pydantic>=2.7
+requests>=2.32
+python-dotenv>=1.0
+beautifulsoup4>=4.12
+trafilatura>=1.12
