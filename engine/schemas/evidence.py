@@ -1,11 +1,11 @@
 """근거 풀(evidence pool) 항목 스키마.
 
-검색 API 결과 1건 = EvidenceDoc 1개.
+검색 API 결과 1건 = EvidenceDoc 1개. 본문은 담지 않는다.
 - 네이버: 요약(snippet)만 사용 → 본문 수집 안 함
-- 카카오: 요약으로 시작, 본문 수집에 성공하면 text가 채워져 fulltext 근거가 됨
+- 카카오: 본문 수집에 성공하면 fulltext 근거가 됨
 
-상세 근거 카드는 doc_id + 인용문으로 이 항목을 참조하고,
-(5) 검증은 인용문이 evidence_text 안에 실제로 있는지 대조한다.
+본문은 LLM이 전체를 읽고, 근거가 되는 내용은 상세 근거 카드에 담는다.
+상세 근거 카드는 doc_id로 이 항목을 참조한다.
 """
 from datetime import datetime
 from typing import Literal
@@ -38,7 +38,6 @@ class EvidenceDoc(BaseModel):
     source_name: str | None = Field(default=None, description="블로그·카페 이름")
     published_at: int | None = Field(default=None, description="작성일 YYYYMMDD. 없으면 None")
 
-    text: str | None = Field(default=None, description="수집한 본문 전체. 수집 전·실패 시 None")
     fetch_status: FetchStatus
     fetch_note: str | None = Field(default=None, description="수집 실패·차단 사유")
     retrieved_at: datetime
@@ -47,9 +46,4 @@ class EvidenceDoc(BaseModel):
     @computed_field
     @property
     def evidence_level(self) -> Literal["snippet", "fulltext"]:
-        return "fulltext" if self.text else "snippet"
-
-    @property
-    def evidence_text(self) -> str:
-        """카드 인용·검증의 기준 문자열."""
-        return self.text or self.snippet
+        return "fulltext" if self.fetch_status == "ok" else "snippet"

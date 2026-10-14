@@ -95,14 +95,18 @@ def _extract(html: str, domain: str) -> str | None:
     return text if len(text) >= MIN_TEXT_LEN else None
 
 
-def fetch_fulltext(doc: EvidenceDoc) -> EvidenceDoc:
-    """pending 상태인 근거의 본문을 수집해 새 EvidenceDoc을 반환."""
+def fetch_fulltext(doc: EvidenceDoc) -> tuple[EvidenceDoc, str | None]:
+    """pending 상태인 근거의 본문을 수집한다.
+
+    반환: (fetch_status가 갱신된 EvidenceDoc, 본문 전체 또는 None)
+    본문은 근거 풀에 넣지 않고 LLM이 읽도록 따로 넘긴다.
+    """
     if doc.fetch_status != "pending":
-        return doc
+        return doc, None
     now = datetime.now().astimezone()
 
-    def done(status: str, note: str | None = None, text: str | None = None) -> EvidenceDoc:
-        return doc.model_copy(update={"fetch_status": status, "fetch_note": note, "text": text, "fetched_at": now})
+    def done(status: str, note: str | None = None, text: str | None = None) -> tuple[EvidenceDoc, str | None]:
+        return doc.model_copy(update={"fetch_status": status, "fetch_note": note, "fetched_at": now}), text
 
     parser = _robots_for(doc.domain)
     if parser is None or not parser.can_fetch(BOT_NAME, doc.url):
