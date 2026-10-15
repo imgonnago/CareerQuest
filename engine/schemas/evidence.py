@@ -9,7 +9,6 @@
 """
 from datetime import datetime
 from typing import Literal
-
 from pydantic import BaseModel, Field, computed_field
 
 Provider = Literal["naver", "kakao"]
@@ -23,7 +22,9 @@ FetchStatus = Literal[
     "failed",       # 네트워크 오류, 본문 추출 실패 등
 ]
 
-
+#2단계 근거 추출 단계 중 첫번째 과정인 근거 풀 항목 스키마 정의.
+#본문은 담지 않고, 검색 API 결과 1건을 EvidenceDoc 1개로 표현
+#
 class EvidenceDoc(BaseModel):
     doc_id: str = Field(description="정규화한 URL의 해시. 같은 문서는 같은 id")
     provider: Provider
