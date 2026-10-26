@@ -1,0 +1,18 @@
+# PyCharm
+.idea/
+
+# Python
+.venv/
+venv/
+__pycache__/
+*.pyc
+
+# Environment variables / secrets
+.env
+
+# PostgreSQL local data
+postgres_data/
+
+# OS
+.DS_Store
+Thumbs.db
