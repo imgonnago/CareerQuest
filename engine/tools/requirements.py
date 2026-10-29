@@ -3,8 +3,8 @@
 합격 후기 · 우대사항 · 자격증 정보처럼 RAG(건양대 자료)에 없는 근거를 보충할 때 쓴다.
 
 흐름
-1. collect_candidates: 소스별 검색 → 소스 간 번갈아 섞기 → doc_id 중복 제거
-2. (예정) 재정렬 모델이 title + snippet으로 후보 순서를 다시 매기는 자리
+1. collect_candidates: 소스별 검색 → 카카오 소스끼리 번갈아 섞은 뒤 네이버를 뒤에 붙임 → doc_id 중복 제거
+2. (2단계 파이프라인) 계획 LLM이 title + snippet 목록을 보고 읽을 문서를 고르는 자리
 3. fetch_texts: 앞에서부터 pending 문서만 max_fetch개까지 본문 수집
 
 본문은 EvidenceDoc에 넣지 않고 texts[doc_id]로 따로 돌려준다.
@@ -28,7 +28,9 @@ SOURCES = {
     "kakao_cafe": ("kakao", "cafe"),
     "kakao_web": ("kakao", "web"),
 }
-DEFAULT_SOURCES = ("naver_blog", "naver_cafe", "kakao_blog", "kakao_web")
+DEFAULT_SOURCES = ("kakao_blog", "kakao_web", "naver_blog", "naver_cafe")
+# 결과 순서. 카카오는 본문까지 읽을 수 있어 1순위, 네이버는 요약만이라 보충용
+PROVIDER_ORDER = ("kakao", "naver")
 
 
 class RequirementSearchResult(BaseModel):
@@ -52,23 +54,26 @@ def collect_candidates(
     sources: tuple[str, ...] = DEFAULT_SOURCES,
     per_source: int = 20,
 ) -> tuple[list[EvidenceDoc], list[str]]:
-    """소스별 검색 결과를 순위대로 번갈아 섞고 중복을 뺀다.
+    """소스별 검색 결과를 섞고 중복을 뺀다. 카카오가 앞, 네이버가 뒤 (같은 제공자 안에서는 순위대로 번갈아).
 
     반환: (후보 목록, 오류 메시지 목록). 한 소스가 실패해도 나머지는 돌려준다.
     """
-    per_source_docs, errors = [], []
+    by_provider: dict[str, list[list[EvidenceDoc]]] = {p: [] for p in PROVIDER_ORDER}
+    errors = []
     for source in sources:
         try:
-            per_source_docs.append(_search(source, query, per_source))
+            by_provider[SOURCES[source][0]].append(_search(source, query, per_source))
         except requests.RequestException as e:
             errors.append(f"{source}: {type(e).__name__}")
 
+    # 카카오(본문 수집 가능)를 전부 앞에, 네이버(요약만)는 뒤에 보충으로
     seen, docs = set(), []
-    for row in zip_longest(*per_source_docs):
-        for doc in row:
-            if doc is not None and doc.doc_id not in seen:
-                seen.add(doc.doc_id)
-                docs.append(doc)
+    for provider in PROVIDER_ORDER:
+        for row in zip_longest(*by_provider[provider]):
+            for doc in row:
+                if doc is not None and doc.doc_id not in seen:
+                    seen.add(doc.doc_id)
+                    docs.append(doc)
     return docs, errors
 
 
@@ -100,7 +105,8 @@ def search_requirements(
     return RequirementSearchResult(query=query, docs=docs, texts=texts, errors=errors)
 
 
-# LLM 도구 호출용 정의 (Ollama · OpenAI 공통 function 형식). 모델 확정 전이라 인자는 최소로
+# LLM 도구 호출용 정의 (Ollama · OpenAI 공통 function 형식).
+# 본문을 읽을 문서는 LLM이 목록을 보고 따로 고르므로(2단계 계획 LLM) 인자는 검색어만 받는다
 TOOL_SPEC = {
     "type": "function",
     "function": {
@@ -111,7 +117,6 @@ TOOL_SPEC = {
             "type": "object",
             "properties": {
                 "query": {"type": "string", "description": "검색어. 예: '데이터 분석가 신입 우대사항'"},
-                "max_fetch": {"type": "integer", "description": "본문까지 읽을 문서 수 (기본 5)"},
             },
             "required": ["query"],
         },
