@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 CareerQuest AI — 대학생(건양대·대전 지역) 맞춤 취업 준비 로드맵을 만드는 LLM + RAG 에이전트. 학생 프로필과 희망 직무를 받아 요구 역량과 비교하고, 교과목·자격증·공모전·지역 프로그램을 **근거(출처)와 함께** 추천한다. 설계 전체와 파트별 TODO는 `README.md`(작업용 초안)에 있다.
 
-- 현재 구현된 것은 `engine/`(검색 도구·크롤링·근거 풀/근거 카드 스키마·근거 추출 루프)뿐이다. `backend/`, `frontend/`, `db/`, `data/`는 아직 비어 있다.
+- 현재 구현된 것은 `engine/`(검색 도구·크롤링·근거 풀/근거 카드 스키마·1~3단계 파이프라인)뿐이다. `backend/`, `frontend/`, `db/`, `data/`는 아직 비어 있다.
 - 실행 환경: 로컬 Ollama(qwen3.5:9b Q4_K_M, bge-m3 임베딩 1024차원). 호출은 `engine/llm.py`의 `chat()`·`embed()`. **외부 LLM API는 사용하지 않는다.**
 - 코드 주석·docstring·커밋 메시지는 한국어로 쓴다.
 
@@ -34,9 +34,10 @@ README의 5단계 파이프라인: (1) 목표 직무 설정 → (2) 근거 추�
 - `engine/tools/crawl.py` — `pending` 문서만 본문 수집: 도메인 정책(`LINK_ONLY_DOMAINS`, `NO_CRAWL_DOMAINS`) → robots.txt(`CareerQuestBot` 기준, 도메인별 캐시, 401/403·요청 실패는 차단 취급) → 도메인별 요청 간격(기본 2초 또는 crawl-delay) → 추출(티스토리는 스킨별 셀렉터, 그 외 trafilatura, 200자 미만이면 실패). 반환은 `(갱신된 EvidenceDoc, text | None)`.
 - `engine/tools/requirements.py` — 요구사항 검색 도구. 카카오 소스끼리 순위대로 번갈아 섞어 앞에 두고 네이버(요약만)는 뒤에 보충으로 붙인 뒤 doc_id로 중복 제거(`collect_candidates`, **카카오 1순위**) → 앞에서부터 pending만 `max_fetch`개 본문 수집(`fetch_texts`). 두 단계 사이가 재정렬 모델이 들어갈 자리다. LLM용 `TOOL_SPEC`(Ollama·OpenAI function 형식) 포함.
 - **단계별 LLM 분리**: 단계(및 단계 안 역할)마다 LLM 설정·시스템 프롬프트·입출력 스키마를 따로 둔다. 실행은 `engine/pipeline/stageN_*.py`, 프롬프트는 `engine/prompts/stageN_*.py`(입출력 형식을 docstring에 적음), 설정은 모듈 상단의 `LLMConfig`(`engine/llm.py`: model·temperature·think·num_ctx). 호출은 `chat(messages, config, tools=, format=)`.
-- `engine/pipeline/stage1_job.py` — (1) 목표 직무 설정. 학생 입력(`schemas/job.py`의 `StudentInput`, 임시 형식) → 직무 설정 LLM이 `TargetJobDraft` JSON(직무명·신입/인턴/경력·세부 관심 분야(원문/고친 용어/검색 키워드)·학생이 말한 기업·직무 검색 키워드) → 코드가 관심 분야 원문·기업명이 학생 입력에 실제로 있는지 대조, 희망 직무·기업명과 겹치는 관심 분야를 빼서 `TargetJob`. 표준 직무 목록은 `catalog` 인자로 받을 자리만 있다.
+- `engine/pipeline/stage1_job.py` — (1) 목표 직무 설정. 학생 입력(`schemas/job.py`의 `StudentInput`, 임시 형식) → 직무 설정 LLM이 `TargetJobDraft` JSON(직무명·신입/인턴/경력·세부 관심 분야(원문/고친 용어/검색 키워드)·학생이 말한 기업(원문/공식명/검색 키워드, `Company`)·보유 기술·자격증·프로젝트(원문/표준 이름, `Held`)·직무 검색 키워드) → 관심 분야 확인 LLM(새 대화, 관심 분야마다 관심/경험 `InterestCheck`, 경험이면 projects로 옮김) → 코드가 원문(관심 분야·기업·보유 항목)이 학생 입력에 실제로 있는지 대조, 폼 칸 보유 항목을 합치고, 희망 직무·기업명·보유 항목과 겹치는 관심 분야를 빼서 `TargetJob`. 2단계에는 기업 공식명을 넘긴다. 표준 직무 목록은 `catalog` 인자로 받을 자리만 있다.
 - **프롬프트 작성 요령(9B 모델)**: 시스템 프롬프트 규칙을 놓치는 일이 잦다. 자주 틀리는 규칙은 사용자 메시지 끝(출력 직전)에 한 번 더 적는다. 선택·추출처럼 짧은 판단은 긴 대화를 이어 가지 말고 새 대화로 필요한 입력만 준다. 사고 기능(think)은 정확도가 오르지만 수십 초가 걸려 기본은 끈다.
-- `engine/pipeline/stage2_evidence.py` — (2) 근거 추출. 입력은 1단계 `TargetJob`(`make_target`이 텍스트로 만듦). 계획 LLM(도구로 검색, 세부 관심 분야마다 검색, 대화엔 `[D번호] 제목` 목록만) → 선택 LLM(새 대화, 근거 풀 전체 제목 목록에서 읽을 문서를 `DocSelection` JSON으로) → 코드(고른 문서만 본문 수집) → 읽기 LLM(새 대화, 본문 전체를 `READ_BUDGET_CHARS` 단위로 문서째 묶어 `CardDraftList` JSON) → 코드(`verify`: quote를 공백 무시하고 원문과 대조, 통과한 것만 `EvidenceCard`). JSON 출력은 Ollama `format`에 pydantic 스키마를 넘겨 강제하고, D번호 칸은 정규식 패턴으로 묶는다(안 묶으면 제목까지 붙여 씀).
+- `engine/pipeline/stage2_evidence.py` — (2) 근거 추출. 입력은 1단계 `TargetJob`(`make_target`이 텍스트로 만듦). 학생에게 줄 정보를 **가이드 슬롯**(`SLOTS`: 교과목 3·교내 프로그램 2·채용 요건 4·자격증 3·공모전·대외활동 2·추천 포트폴리오 2, 수는 카드가 아니라 고유 근거 문서 수)으로 정해 두고, 한 바퀴마다 **부족한 슬롯마다 따로** 계획 LLM(새 대화, 슬롯 설명·검색 방향 `SLOT_TASKS`와 그 슬롯에서 쓴 검색어를 주고 `SearchPlan` JSON으로 검색어만 받음, 검색은 코드가 실행하고 문서마다 슬롯을 기록) → 선택 LLM(새 대화, 그 슬롯 검색 결과 중 안 읽은 문서 제목 목록에서 `SELECT_PER_SLOT`건을 `DocSelection` JSON으로) → 코드(고른 문서만 본문 수집) → 읽기 LLM(새 대화, 본문 전체를 `READ_BUDGET_CHARS` 단위로 문서째 묶고 문서마다 고른 슬롯을 참고로 적어 `CardDraftList` JSON) → 코드(`verify`: quote를 공백 무시하고 원문과 대조, 통과한 것만 `EvidenceCard`). 이 바퀴를 **추출 루프**로 슬롯이 다 찰 때까지 반복(`MAX_ROUNDS` 3·`MAX_SECONDS` 90, 바퀴 시작 전 확인). 한 번에 모든 슬롯을 계획·선택시키면 9B 모델이 일부 슬롯만 하거나 이전 계획을 되풀이해서 나눴다. 교내 슬롯(교과목·교내 프로그램)은 건양대 문서(`is_school_doc`)의 카드만 남긴다 — RAG가 없어 지금은 검색으로 채우고, RAG를 붙인 뒤에는 RAG 정보가 오래됐을 때 보충하는 경로. 공모전·대외활동은 건양대 교내 대회와 외부 공모전·해커톤·대외활동을 여러 방면으로 검색(`FIRST_QUERIES`). 검색어는 "대상(건양대·기업 공식명·직무·상위 분야) + 찾는 영역" 2~5단어. JSON 출력은 Ollama `format`에 pydantic 스키마를 넘겨 강제하고, D번호 칸은 정규식 패턴으로 묶는다(안 묶으면 제목까지 붙여 씀).
+- `engine/pipeline/stage3_aggregate.py` — (3) 근거 집계. 입력은 2단계 `ExtractionResult`. 코드((doc_id, quote) 중복 제거, 근거 번호 C1…) → 역할 LLM(카드가 나온 문서마다 채용공고·우대사항정리·자격증정보·프로젝트추천 등 `DocRole`, 제목·요약·카드 item으로 판단) → 이름 뽑기 LLM(item마다 짧은 Skill 이름) → 코드(표기 병합, bge-m3 임베딩 후보 묶음) → 합치기 LLM(후보만) → 코드(Skill별 가이드 슬롯·고유 문서 수·분류별·역할별·기업·근거 번호 `SkillRow`, 슬롯 순 정렬). 기업정보 카드는 집계에서 빼고, Gap은 DB가 없어 아직 없음. `render_table`이 표 텍스트.
 - **근거 풀 vs 근거 카드**: 근거 풀은 코드가 검색 결과를 전부 담는 원문 목록, 근거 카드는 LLM이 그중 근거만 골라 만든 것. "근거를 못 찾으면 넣지 않는다"는 카드 기준이다.
 - `engine/tools/text.py` — 태그/엔티티 정리, URL 정규화(티스토리 `/m/` 제거, 추적 파라미터 제거), 날짜를 `YYYYMMDD` 정수로.
 
@@ -49,5 +50,5 @@ README의 5단계 파이프라인: (1) 목표 직무 설정 → (2) 근거 추�
 - 수집 방법 순서: API → 크롤링(robots.txt·이용약관 확인한 사이트만) → 수작업.
 - 채용 플랫폼(잡코리아·사람인·링커리어·캐치·원티드 등) 상세 페이지는 크롤링하지 않고 링크만 제공한다. 합격 자소서는 수집하지 않는다.
 - 날짜(작성일·마감일)는 정수 `YYYYMMDD`로 저장한다.
-- 코드 수정·테스트 중 발견한 문제점이나 고쳐야 할 부분은 루트의 `problem.txt`에 번호를 붙여 추가한다. 고친 항목은 제목 옆에 `(해결)`을 붙이고 어떻게 고쳤는지 한 줄 남긴다. 작업 시작 전에 미해결 항목을 확인한다.
+- 코드 수정·테스트 중 발견한 문제점이나 고쳐야 할 부분은 루트의 `problem.txt`에 번호를 붙여 추가한다. 고친 항목은 제목 옆에 `(해결)`을 붙이고 "해결" 블록(해결: 날짜·한 줄 요약 / 방법: 어디를 어떻게 바꿨고 왜 / 확인: 테스트 결과·남은 한계)으로 처리 방법을 요약한다. 작업 시작 전에 미해결 항목을 확인한다.
 - 커밋은 사용자가 직접 한다. 파일 수정까지만 하고 commit/push 하지 않는다.
