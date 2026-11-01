@@ -1,0 +1,918 @@
+[
+  {
+    "contract_version": "1.0",
+    "resource_id": 107,
+    "resource_type": "COURSE",
+    "resource_name": "나의 꿈과 미래디자인",
+    "source_document_id": 207,
+    "source_title": "2026 인공지능학과 - 나의 꿈과 미래디자인",
+    "content": "Resource Type: COURSE\nName: 나의 꿈과 미래디자인\nOrganization: 건양대학교 인공지능학과\nCourse Code: 00043L\nDepartment: 인공지능학과\nCurriculum Year: 2026\nYear Level: 1\nSemester: 2\nCompletion Type: 진로취창업\nCredits: 1.0\n\n===== SOURCE DOCUMENT =====\n나의 꿈과 미래디자인",
+    "allowed_skills": [
+      {
+        "skill_id": 1,
+        "name": "Python",
+        "aliases": [
+          "파이썬"
+        ],
+        "category": "PROGRAMMING",
+        "description": "Python 프로그래밍 언어 활용 능력"
+      },
+      {
+        "skill_id": 2,
+        "name": "Java",
+        "aliases": [
+          "자바"
+        ],
+        "category": "PROGRAMMING",
+        "description": "Java 프로그래밍 언어 활용 능력"
+      },
+      {
+        "skill_id": 3,
+        "name": "JavaScript",
+        "aliases": [
+          "자바스크립트",
+          "JS"
+        ],
+        "category": "PROGRAMMING",
+        "description": "JavaScript 프로그래밍 및 웹 개발 능력"
+      },
+      {
+        "skill_id": 4,
+        "name": "TypeScript",
+        "aliases": [
+          "타입스크립트",
+          "TS"
+        ],
+        "category": "PROGRAMMING",
+        "description": "TypeScript 기반 애플리케이션 개발 능력"
+      },
+      {
+        "skill_id": 5,
+        "name": "C",
+        "aliases": [],
+        "category": "PROGRAMMING",
+        "description": "C 프로그래밍 언어 활용 능력"
+      },
+      {
+        "skill_id": 6,
+        "name": "C++",
+        "aliases": [
+          "CPP"
+        ],
+        "category": "PROGRAMMING",
+        "description": "C++ 프로그래밍 언어 활용 능력"
+      },
+      {
+        "skill_id": 7,
+        "name": "SQL",
+        "aliases": [
+          "Structured Query Language"
+        ],
+        "category": "PROGRAMMING",
+        "description": "SQL을 이용한 데이터 조회 및 조작 능력"
+      },
+      {
+        "skill_id": 8,
+        "name": "Backend Development",
+        "aliases": [
+          "백엔드",
+          "백엔드 개발",
+          "서버 개발"
+        ],
+        "category": "BACKEND",
+        "description": "서버 및 백엔드 애플리케이션 개발 능력"
+      },
+      {
+        "skill_id": 9,
+        "name": "Spring",
+        "aliases": [
+          "스프링",
+          "스프링부트",
+          "스프링 부트",
+          "Spring Boot"
+        ],
+        "category": "BACKEND",
+        "description": "Spring Framework 기반 Java 서버 개발 능력"
+      },
+      {
+        "skill_id": 10,
+        "name": "FastAPI",
+        "aliases": [
+          "Fast API"
+        ],
+        "category": "BACKEND",
+        "description": "FastAPI 기반 Python API 서버 개발 능력"
+      },
+      {
+        "skill_id": 11,
+        "name": "REST API",
+        "aliases": [
+          "REST",
+          "RESTful",
+          "RESTful API"
+        ],
+        "category": "BACKEND",
+        "description": "REST 구조의 API 설계 및 구현 능력"
+      },
+      {
+        "skill_id": 12,
+        "name": "Node.js",
+        "aliases": [
+          "Node",
+          "NodeJS"
+        ],
+        "category": "BACKEND",
+        "description": "Node.js 기반 서버 개발 능력"
+      },
+      {
+        "skill_id": 13,
+        "name": "React",
+        "aliases": [
+          "리액트",
+          "React.js",
+          "ReactJS"
+        ],
+        "category": "FRONTEND",
+        "description": "React 기반 프론트엔드 개발 능력"
+      },
+      {
+        "skill_id": 14,
+        "name": "Database",
+        "aliases": [
+          "데이터베이스",
+          "DB"
+        ],
+        "category": "DATA",
+        "description": "데이터베이스 기본 원리 및 활용 능력"
+      },
+      {
+        "skill_id": 15,
+        "name": "RDBMS",
+        "aliases": [
+          "관계형 데이터베이스",
+          "Relational Database"
+        ],
+        "category": "DATA",
+        "description": "관계형 데이터베이스 이해 및 활용 능력"
+      },
+      {
+        "skill_id": 16,
+        "name": "PostgreSQL",
+        "aliases": [
+          "Postgres"
+        ],
+        "category": "DATA",
+        "description": "PostgreSQL 데이터베이스 활용 능력"
+      },
+      {
+        "skill_id": 17,
+        "name": "Data Modeling",
+        "aliases": [
+          "데이터모델링",
+          "데이터 모델링"
+        ],
+        "category": "DATA",
+        "description": "데이터 모델 및 데이터베이스 구조 설계 능력"
+      },
+      {
+        "skill_id": 18,
+        "name": "Data Analysis",
+        "aliases": [
+          "데이터분석",
+          "데이터 분석"
+        ],
+        "category": "DATA",
+        "description": "데이터 탐색, 처리 및 분석 능력"
+      },
+      {
+        "skill_id": 19,
+        "name": "Data Visualization",
+        "aliases": [
+          "시각화",
+          "데이터 시각화"
+        ],
+        "category": "DATA",
+        "description": "데이터를 시각적으로 표현하고 해석하는 능력"
+      },
+      {
+        "skill_id": 20,
+        "name": "ETL",
+        "aliases": [
+          "데이터 파이프라인",
+          "Extract Transform Load"
+        ],
+        "category": "DATA",
+        "description": "데이터 추출, 변환 및 적재 파이프라인 구축 능력"
+      },
+      {
+        "skill_id": 21,
+        "name": "Statistics",
+        "aliases": [
+          "통계",
+          "통계학"
+        ],
+        "category": "DATA",
+        "description": "통계적 분석 및 데이터 해석 능력"
+      },
+      {
+        "skill_id": 22,
+        "name": "Machine Learning",
+        "aliases": [
+          "머신러닝",
+          "ML"
+        ],
+        "category": "AI",
+        "description": "머신러닝 모델 설계, 학습 및 평가 능력"
+      },
+      {
+        "skill_id": 23,
+        "name": "Deep Learning",
+        "aliases": [
+          "딥러닝",
+          "DL"
+        ],
+        "category": "AI",
+        "description": "신경망 기반 딥러닝 모델 개발 능력"
+      },
+      {
+        "skill_id": 24,
+        "name": "PyTorch",
+        "aliases": [
+          "파이토치"
+        ],
+        "category": "AI",
+        "description": "PyTorch 기반 딥러닝 모델 개발 능력"
+      },
+      {
+        "skill_id": 25,
+        "name": "TensorFlow",
+        "aliases": [
+          "텐서플로"
+        ],
+        "category": "AI",
+        "description": "TensorFlow 기반 머신러닝 및 딥러닝 개발 능력"
+      },
+      {
+        "skill_id": 26,
+        "name": "LLM",
+        "aliases": [
+          "거대언어모델",
+          "대규모 언어 모델",
+          "Large Language Model",
+          "Large Language Models"
+        ],
+        "category": "AI",
+        "description": "대규모 언어 모델 활용 및 응용 기술"
+      },
+      {
+        "skill_id": 27,
+        "name": "RAG",
+        "aliases": [
+          "검색 증강 생성",
+          "Retrieval Augmented Generation"
+        ],
+        "category": "AI",
+        "description": "외부 검색 정보를 결합한 생성형 AI 시스템 구축 기술"
+      },
+      {
+        "skill_id": 28,
+        "name": "Natural Language Processing",
+        "aliases": [
+          "자연어처리",
+          "자연어 처리",
+          "NLP"
+        ],
+        "category": "AI",
+        "description": "자연어 데이터 처리 및 분석 기술"
+      },
+      {
+        "skill_id": 29,
+        "name": "Computer Vision",
+        "aliases": [
+          "영상처리",
+          "컴퓨터비전",
+          "컴퓨터 비전",
+          "CV"
+        ],
+        "category": "AI",
+        "description": "이미지 및 영상 기반 인공지능 기술"
+      },
+      {
+        "skill_id": 30,
+        "name": "MLOps",
+        "aliases": [
+          "ML Ops"
+        ],
+        "category": "AI_INFRA",
+        "description": "머신러닝 모델의 배포, 운영 및 자동화 기술"
+      },
+      {
+        "skill_id": 31,
+        "name": "Prompt Engineering",
+        "aliases": [
+          "프롬프트 엔지니어링"
+        ],
+        "category": "AI",
+        "description": "생성형 AI 모델의 프롬프트 설계 및 개선 능력"
+      },
+      {
+        "skill_id": 32,
+        "name": "Git",
+        "aliases": [
+          "깃"
+        ],
+        "category": "DEVOPS",
+        "description": "Git 기반 버전 관리 및 협업 능력"
+      },
+      {
+        "skill_id": 33,
+        "name": "Linux",
+        "aliases": [
+          "리눅스"
+        ],
+        "category": "DEVOPS",
+        "description": "Linux 환경 활용 및 시스템 운용 능력"
+      },
+      {
+        "skill_id": 34,
+        "name": "Docker",
+        "aliases": [
+          "도커",
+          "컨테이너",
+          "Container"
+        ],
+        "category": "DEVOPS",
+        "description": "Docker 기반 컨테이너 환경 구축 및 운영 능력"
+      },
+      {
+        "skill_id": 35,
+        "name": "AWS",
+        "aliases": [
+          "Amazon Web Services"
+        ],
+        "category": "CLOUD",
+        "description": "Amazon Web Services 기반 클라우드 활용 능력"
+      },
+      {
+        "skill_id": 36,
+        "name": "Cloud",
+        "aliases": [
+          "클라우드",
+          "Cloud Computing"
+        ],
+        "category": "CLOUD",
+        "description": "클라우드 인프라 및 서비스 활용 능력"
+      },
+      {
+        "skill_id": 37,
+        "name": "CI/CD",
+        "aliases": [
+          "Continuous Deployment",
+          "Continuous Integration"
+        ],
+        "category": "DEVOPS",
+        "description": "소프트웨어 빌드, 테스트 및 배포 자동화 능력"
+      },
+      {
+        "skill_id": 38,
+        "name": "Algorithm",
+        "aliases": [
+          "알고리즘"
+        ],
+        "category": "CS",
+        "description": "알고리즘 설계 및 문제 해결 능력"
+      },
+      {
+        "skill_id": 39,
+        "name": "Data Structure",
+        "aliases": [
+          "자료구조",
+          "Data Structures"
+        ],
+        "category": "CS",
+        "description": "자료구조 이해 및 활용 능력"
+      },
+      {
+        "skill_id": 40,
+        "name": "Software Engineering",
+        "aliases": [
+          "소프트웨어공학",
+          "소프트웨어 공학"
+        ],
+        "category": "CS",
+        "description": "소프트웨어 개발 생명주기와 설계 원칙에 대한 이해"
+      },
+      {
+        "skill_id": 41,
+        "name": "Software Testing",
+        "aliases": [
+          "테스트",
+          "소프트웨어 테스트",
+          "Testing"
+        ],
+        "category": "CS",
+        "description": "소프트웨어 테스트 설계 및 검증 능력"
+      },
+      {
+        "skill_id": 42,
+        "name": "Operating System",
+        "aliases": [
+          "운영체제",
+          "OS"
+        ],
+        "category": "CS",
+        "description": "운영체제 구조와 동작 원리에 대한 이해"
+      },
+      {
+        "skill_id": 43,
+        "name": "Computer Network",
+        "aliases": [
+          "네트워크",
+          "Network",
+          "Networking"
+        ],
+        "category": "CS",
+        "description": "컴퓨터 네트워크 구조와 통신 원리에 대한 이해"
+      },
+      {
+        "skill_id": 44,
+        "name": "Problem Solving",
+        "aliases": [
+          "문제해결",
+          "문제 해결"
+        ],
+        "category": "GENERAL",
+        "description": "문제를 분석하고 해결 방법을 도출하는 능력"
+      },
+      {
+        "skill_id": 45,
+        "name": "Collaboration",
+        "aliases": [
+          "협업",
+          "팀워크",
+          "Teamwork"
+        ],
+        "category": "GENERAL",
+        "description": "팀 단위 개발 및 협업 능력"
+      }
+    ]
+  },
+  {
+    "contract_version": "1.0",
+    "resource_id": 108,
+    "resource_type": "COURSE",
+    "resource_name": "기업가정신과 리더십",
+    "source_document_id": 208,
+    "source_title": "2026 인공지능학과 - 기업가정신과 리더십",
+    "content": "Resource Type: COURSE\nName: 기업가정신과 리더십\nOrganization: 건양대학교 인공지능학과\nCourse Code: 00006I\nDepartment: 인공지능학과\nCurriculum Year: 2026\nYear Level: 2\nSemester: 1/2\nCompletion Type: 진로취창업\nCredits: 1.0\n\n===== SOURCE DOCUMENT =====\n기업가정신과 리더십",
+    "allowed_skills": [
+      {
+        "skill_id": 1,
+        "name": "Python",
+        "aliases": [
+          "파이썬"
+        ],
+        "category": "PROGRAMMING",
+        "description": "Python 프로그래밍 언어 활용 능력"
+      },
+      {
+        "skill_id": 2,
+        "name": "Java",
+        "aliases": [
+          "자바"
+        ],
+        "category": "PROGRAMMING",
+        "description": "Java 프로그래밍 언어 활용 능력"
+      },
+      {
+        "skill_id": 3,
+        "name": "JavaScript",
+        "aliases": [
+          "자바스크립트",
+          "JS"
+        ],
+        "category": "PROGRAMMING",
+        "description": "JavaScript 프로그래밍 및 웹 개발 능력"
+      },
+      {
+        "skill_id": 4,
+        "name": "TypeScript",
+        "aliases": [
+          "타입스크립트",
+          "TS"
+        ],
+        "category": "PROGRAMMING",
+        "description": "TypeScript 기반 애플리케이션 개발 능력"
+      },
+      {
+        "skill_id": 5,
+        "name": "C",
+        "aliases": [],
+        "category": "PROGRAMMING",
+        "description": "C 프로그래밍 언어 활용 능력"
+      },
+      {
+        "skill_id": 6,
+        "name": "C++",
+        "aliases": [
+          "CPP"
+        ],
+        "category": "PROGRAMMING",
+        "description": "C++ 프로그래밍 언어 활용 능력"
+      },
+      {
+        "skill_id": 7,
+        "name": "SQL",
+        "aliases": [
+          "Structured Query Language"
+        ],
+        "category": "PROGRAMMING",
+        "description": "SQL을 이용한 데이터 조회 및 조작 능력"
+      },
+      {
+        "skill_id": 8,
+        "name": "Backend Development",
+        "aliases": [
+          "백엔드",
+          "백엔드 개발",
+          "서버 개발"
+        ],
+        "category": "BACKEND",
+        "description": "서버 및 백엔드 애플리케이션 개발 능력"
+      },
+      {
+        "skill_id": 9,
+        "name": "Spring",
+        "aliases": [
+          "스프링",
+          "스프링부트",
+          "스프링 부트",
+          "Spring Boot"
+        ],
+        "category": "BACKEND",
+        "description": "Spring Framework 기반 Java 서버 개발 능력"
+      },
+      {
+        "skill_id": 10,
+        "name": "FastAPI",
+        "aliases": [
+          "Fast API"
+        ],
+        "category": "BACKEND",
+        "description": "FastAPI 기반 Python API 서버 개발 능력"
+      },
+      {
+        "skill_id": 11,
+        "name": "REST API",
+        "aliases": [
+          "REST",
+          "RESTful",
+          "RESTful API"
+        ],
+        "category": "BACKEND",
+        "description": "REST 구조의 API 설계 및 구현 능력"
+      },
+      {
+        "skill_id": 12,
+        "name": "Node.js",
+        "aliases": [
+          "Node",
+          "NodeJS"
+        ],
+        "category": "BACKEND",
+        "description": "Node.js 기반 서버 개발 능력"
+      },
+      {
+        "skill_id": 13,
+        "name": "React",
+        "aliases": [
+          "리액트",
+          "React.js",
+          "ReactJS"
+        ],
+        "category": "FRONTEND",
+        "description": "React 기반 프론트엔드 개발 능력"
+      },
+      {
+        "skill_id": 14,
+        "name": "Database",
+        "aliases": [
+          "데이터베이스",
+          "DB"
+        ],
+        "category": "DATA",
+        "description": "데이터베이스 기본 원리 및 활용 능력"
+      },
+      {
+        "skill_id": 15,
+        "name": "RDBMS",
+        "aliases": [
+          "관계형 데이터베이스",
+          "Relational Database"
+        ],
+        "category": "DATA",
+        "description": "관계형 데이터베이스 이해 및 활용 능력"
+      },
+      {
+        "skill_id": 16,
+        "name": "PostgreSQL",
+        "aliases": [
+          "Postgres"
+        ],
+        "category": "DATA",
+        "description": "PostgreSQL 데이터베이스 활용 능력"
+      },
+      {
+        "skill_id": 17,
+        "name": "Data Modeling",
+        "aliases": [
+          "데이터모델링",
+          "데이터 모델링"
+        ],
+        "category": "DATA",
+        "description": "데이터 모델 및 데이터베이스 구조 설계 능력"
+      },
+      {
+        "skill_id": 18,
+        "name": "Data Analysis",
+        "aliases": [
+          "데이터분석",
+          "데이터 분석"
+        ],
+        "category": "DATA",
+        "description": "데이터 탐색, 처리 및 분석 능력"
+      },
+      {
+        "skill_id": 19,
+        "name": "Data Visualization",
+        "aliases": [
+          "시각화",
+          "데이터 시각화"
+        ],
+        "category": "DATA",
+        "description": "데이터를 시각적으로 표현하고 해석하는 능력"
+      },
+      {
+        "skill_id": 20,
+        "name": "ETL",
+        "aliases": [
+          "데이터 파이프라인",
+          "Extract Transform Load"
+        ],
+        "category": "DATA",
+        "description": "데이터 추출, 변환 및 적재 파이프라인 구축 능력"
+      },
+      {
+        "skill_id": 21,
+        "name": "Statistics",
+        "aliases": [
+          "통계",
+          "통계학"
+        ],
+        "category": "DATA",
+        "description": "통계적 분석 및 데이터 해석 능력"
+      },
+      {
+        "skill_id": 22,
+        "name": "Machine Learning",
+        "aliases": [
+          "머신러닝",
+          "ML"
+        ],
+        "category": "AI",
+        "description": "머신러닝 모델 설계, 학습 및 평가 능력"
+      },
+      {
+        "skill_id": 23,
+        "name": "Deep Learning",
+        "aliases": [
+          "딥러닝",
+          "DL"
+        ],
+        "category": "AI",
+        "description": "신경망 기반 딥러닝 모델 개발 능력"
+      },
+      {
+        "skill_id": 24,
+        "name": "PyTorch",
+        "aliases": [
+          "파이토치"
+        ],
+        "category": "AI",
+        "description": "PyTorch 기반 딥러닝 모델 개발 능력"
+      },
+      {
+        "skill_id": 25,
+        "name": "TensorFlow",
+        "aliases": [
+          "텐서플로"
+        ],
+        "category": "AI",
+        "description": "TensorFlow 기반 머신러닝 및 딥러닝 개발 능력"
+      },
+      {
+        "skill_id": 26,
+        "name": "LLM",
+        "aliases": [
+          "거대언어모델",
+          "대규모 언어 모델",
+          "Large Language Model",
+          "Large Language Models"
+        ],
+        "category": "AI",
+        "description": "대규모 언어 모델 활용 및 응용 기술"
+      },
+      {
+        "skill_id": 27,
+        "name": "RAG",
+        "aliases": [
+          "검색 증강 생성",
+          "Retrieval Augmented Generation"
+        ],
+        "category": "AI",
+        "description": "외부 검색 정보를 결합한 생성형 AI 시스템 구축 기술"
+      },
+      {
+        "skill_id": 28,
+        "name": "Natural Language Processing",
+        "aliases": [
+          "자연어처리",
+          "자연어 처리",
+          "NLP"
+        ],
+        "category": "AI",
+        "description": "자연어 데이터 처리 및 분석 기술"
+      },
+      {
+        "skill_id": 29,
+        "name": "Computer Vision",
+        "aliases": [
+          "영상처리",
+          "컴퓨터비전",
+          "컴퓨터 비전",
+          "CV"
+        ],
+        "category": "AI",
+        "description": "이미지 및 영상 기반 인공지능 기술"
+      },
+      {
+        "skill_id": 30,
+        "name": "MLOps",
+        "aliases": [
+          "ML Ops"
+        ],
+        "category": "AI_INFRA",
+        "description": "머신러닝 모델의 배포, 운영 및 자동화 기술"
+      },
+      {
+        "skill_id": 31,
+        "name": "Prompt Engineering",
+        "aliases": [
+          "프롬프트 엔지니어링"
+        ],
+        "category": "AI",
+        "description": "생성형 AI 모델의 프롬프트 설계 및 개선 능력"
+      },
+      {
+        "skill_id": 32,
+        "name": "Git",
+        "aliases": [
+          "깃"
+        ],
+        "category": "DEVOPS",
+        "description": "Git 기반 버전 관리 및 협업 능력"
+      },
+      {
+        "skill_id": 33,
+        "name": "Linux",
+        "aliases": [
+          "리눅스"
+        ],
+        "category": "DEVOPS",
+        "description": "Linux 환경 활용 및 시스템 운용 능력"
+      },
+      {
+        "skill_id": 34,
+        "name": "Docker",
+        "aliases": [
+          "도커",
+          "컨테이너",
+          "Container"
+        ],
+        "category": "DEVOPS",
+        "description": "Docker 기반 컨테이너 환경 구축 및 운영 능력"
+      },
+      {
+        "skill_id": 35,
+        "name": "AWS",
+        "aliases": [
+          "Amazon Web Services"
+        ],
+        "category": "CLOUD",
+        "description": "Amazon Web Services 기반 클라우드 활용 능력"
+      },
+      {
+        "skill_id": 36,
+        "name": "Cloud",
+        "aliases": [
+          "클라우드",
+          "Cloud Computing"
+        ],
+        "category": "CLOUD",
+        "description": "클라우드 인프라 및 서비스 활용 능력"
+      },
+      {
+        "skill_id": 37,
+        "name": "CI/CD",
+        "aliases": [
+          "Continuous Deployment",
+          "Continuous Integration"
+        ],
+        "category": "DEVOPS",
+        "description": "소프트웨어 빌드, 테스트 및 배포 자동화 능력"
+      },
+      {
+        "skill_id": 38,
+        "name": "Algorithm",
+        "aliases": [
+          "알고리즘"
+        ],
+        "category": "CS",
+        "description": "알고리즘 설계 및 문제 해결 능력"
+      },
+      {
+        "skill_id": 39,
+        "name": "Data Structure",
+        "aliases": [
+          "자료구조",
+          "Data Structures"
+        ],
+        "category": "CS",
+        "description": "자료구조 이해 및 활용 능력"
+      },
+      {
+        "skill_id": 40,
+        "name": "Software Engineering",
+        "aliases": [
+          "소프트웨어공학",
+          "소프트웨어 공학"
+        ],
+        "category": "CS",
+        "description": "소프트웨어 개발 생명주기와 설계 원칙에 대한 이해"
+      },
+      {
+        "skill_id": 41,
+        "name": "Software Testing",
+        "aliases": [
+          "테스트",
+          "소프트웨어 테스트",
+          "Testing"
+        ],
+        "category": "CS",
+        "description": "소프트웨어 테스트 설계 및 검증 능력"
+      },
+      {
+        "skill_id": 42,
+        "name": "Operating System",
+        "aliases": [
+          "운영체제",
+          "OS"
+        ],
+        "category": "CS",
+        "description": "운영체제 구조와 동작 원리에 대한 이해"
+      },
+      {
+        "skill_id": 43,
+        "name": "Computer Network",
+        "aliases": [
+          "네트워크",
+          "Network",
+          "Networking"
+        ],
+        "category": "CS",
+        "description": "컴퓨터 네트워크 구조와 통신 원리에 대한 이해"
+      },
+      {
+        "skill_id": 44,
+        "name": "Problem Solving",
+        "aliases": [
+          "문제해결",
+          "문제 해결"
+        ],
+        "category": "GENERAL",
+        "description": "문제를 분석하고 해결 방법을 도출하는 능력"
+      },
+      {
+        "skill_id": 45,
+        "name": "Collaboration",
+        "aliases": [
+          "협업",
+          "팀워크",
+          "Teamwork"
+        ],
+        "category": "GENERAL",
+        "description": "팀 단위 개발 및 협업 능력"
+      }
+    ]
+  }
+]

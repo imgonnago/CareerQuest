@@ -1,40 +1,51 @@
 from __future__ import annotations
 
-import re
-from enum import Enum
+from enum import StrEnum
 
-from pydantic import (
-    BaseModel,
-    ConfigDict,
-    Field,
-)
+from pydantic import BaseModel, Field
 
 
 # ============================================================
-# Enum
+# Contract version
 # ============================================================
 
-class ResourceType(str, Enum):
-    JOB = "JOB"
-    CERTIFICATE = "CERTIFICATE"
+SKILL_MAPPING_CONTRACT_VERSION = "1.0"
+
+
+# ============================================================
+# Resource type
+# ============================================================
+
+class ResourceType(StrEnum):
     COURSE = "COURSE"
+    CERTIFICATE = "CERTIFICATE"
+    JOB = "JOB"
     PROGRAM = "PROGRAM"
 
 
-class RelationType(str, Enum):
+# ============================================================
+# Resource-Skill relation
+# ============================================================
+
+class RelationType(StrEnum):
     REQUIRED = "REQUIRED"
     PREFERRED = "PREFERRED"
+
     TAUGHT = "TAUGHT"
     VERIFIED = "VERIFIED"
+
     RELATED = "RELATED"
     EXPERIENCED = "EXPERIENCED"
 
 
 # ============================================================
-# Resource 유형별 허용 관계
+# Resource 종류별 허용 관계
 # ============================================================
 
-ALLOWED_RELATIONS_BY_RESOURCE = {
+ALLOWED_RELATIONS_BY_RESOURCE_TYPE: dict[
+    ResourceType,
+    set[RelationType],
+] = {
     ResourceType.JOB: {
         RelationType.REQUIRED,
         RelationType.PREFERRED,
@@ -54,125 +65,94 @@ ALLOWED_RELATIONS_BY_RESOURCE = {
     ResourceType.PROGRAM: {
         RelationType.TAUGHT,
         RelationType.RELATED,
+        RelationType.EXPERIENCED,
     },
 }
 
 
 # ============================================================
-# Skill 사전 전달용
+# Skill reference
+#
+# 팀원 모델이 사용할 수 있는 Skill 목록
 # ============================================================
 
 class SkillReference(BaseModel):
-    """
-    LLM에게 알려줄 CareerQuest 표준 Skill.
-    """
-
-    model_config = ConfigDict(
-        extra="forbid"
-    )
-
     skill_id: int
 
-    name: str = Field(
-        min_length=1
-    )
+    name: str
 
     aliases: list[str] = Field(
         default_factory=list
     )
 
+    category: str | None = None
+
+    description: str | None = None
+
 
 # ============================================================
-# LLM 입력
+# Mapping Input
+#
+# 데이터 담당 -> 모델 담당
 # ============================================================
 
 class SkillMappingInput(BaseModel):
-    """
-    LLM Skill Mapper에게 전달되는 입력 데이터.
-    """
-
-    model_config = ConfigDict(
-        extra="forbid"
+    contract_version: str = (
+        SKILL_MAPPING_CONTRACT_VERSION
     )
 
     resource_id: int
 
     resource_type: ResourceType
 
-    resource_name: str = Field(
-        min_length=1
-    )
+    resource_name: str
 
-    source_document_id: int
+    source_document_id: int | None = None
 
     source_title: str | None = None
 
-    content: str = Field(
-        min_length=1
-    )
+    content: str
 
     allowed_skills: list[
         SkillReference
     ] = Field(
-        min_length=1
+        default_factory=list
     )
 
 
 # ============================================================
-# LLM이 반환할 Skill 하나
+# 하나의 Skill 매핑 결과
 # ============================================================
 
 class SkillMappingItem(BaseModel):
-    """
-    LLM이 추출한 하나의 Skill Mapping.
-    """
-
-    model_config = ConfigDict(
-        extra="forbid"
-    )
-
-    # 반드시 CareerQuest Skill 사전의
-    # canonical name을 반환해야 함
-    skill_name: str = Field(
-        min_length=1
-    )
+    skill_name: str
 
     relation_type: RelationType
 
-    # 실제 원문에 존재하는 근거
-    evidence_text: str = Field(
-        min_length=1,
-        max_length=1000,
-    )
+    evidence_text: str
 
     confidence: float = Field(
         ge=0.0,
         le=1.0,
     )
 
-    # 선택적 설명
-    reason: str | None = Field(
-        default=None,
-        max_length=500,
-    )
+    reason: str | None = None
 
 
 # ============================================================
-# LLM 전체 출력
+# Mapping Output
+#
+# 모델 담당 -> 데이터 담당
 # ============================================================
 
 class SkillMappingOutput(BaseModel):
-    """
-    LLM이 최종 반환해야 하는 JSON 구조.
-    """
-
-    model_config = ConfigDict(
-        extra="forbid"
+    contract_version: str = (
+        SKILL_MAPPING_CONTRACT_VERSION
     )
 
     resource_id: int
 
-    source_document_id: int
+    source_document_id: int | None = None
 
     mappings: list[
         SkillMappingItem
@@ -180,225 +160,162 @@ class SkillMappingOutput(BaseModel):
         default_factory=list
     )
 
-    # 원문에는 기술이 있는데
-    # CareerQuest Skill 사전에는 없었던 경우
+    # 원문에서 기술명이 보이지만
+    # Skill DB 45개에 없는 경우 기록
     #
-    # 절대 자동으로 Skill을 생성하지 않고
-    # 이곳에 보고만 한다.
-    unmapped_skills: list[str] = Field(
+    # 모델이 임의로 Skill을 생성하지 않도록 하기 위함
+    unmapped_skills: list[
+        str
+    ] = Field(
         default_factory=list
     )
 
 
 # ============================================================
-# 문자열 정규화
-# ============================================================
-
-def normalize_text(
-    value: str,
-) -> str:
-
-    return re.sub(
-        r"\s+",
-        " ",
-        value.strip().lower(),
-    )
-
-
-# ============================================================
-# 최종 검증
+# Contract 검증
 # ============================================================
 
 def validate_mapping_output(
-    request: SkillMappingInput,
-    response: SkillMappingOutput,
-) -> list[str]:
-    """
-    LLM 결과를 DB에 넣기 전에
-    백엔드에서 반드시 수행하는 검증.
-
-    반환값:
-    - []        → 정상
-    - ["..."]   → 오류 있음
-    """
-
-    errors: list[str] = []
+    mapping_input: SkillMappingInput,
+    mapping_output: SkillMappingOutput,
+) -> None:
 
     # --------------------------------------------------------
-    # Resource 일치
+    # 1. resource_id
     # --------------------------------------------------------
 
     if (
-        request.resource_id
-        != response.resource_id
+        mapping_input.resource_id
+        != mapping_output.resource_id
     ):
-
-        errors.append(
-            "resource_id가 "
-            "입력값과 다릅니다."
-        )
-
-    # --------------------------------------------------------
-    # SourceDocument 일치
-    # --------------------------------------------------------
-
-    if (
-        request.source_document_id
-        != response.source_document_id
-    ):
-
-        errors.append(
-            "source_document_id가 "
-            "입력값과 다릅니다."
-        )
-
-    # --------------------------------------------------------
-    # 허용된 Skill 목록
-    # --------------------------------------------------------
-
-    allowed_skill_names = {
-        normalize_text(skill.name):
-            skill.name
-
-        for skill
-        in request.allowed_skills
-    }
-
-    # --------------------------------------------------------
-    # Resource 유형별 허용 관계
-    # --------------------------------------------------------
-
-    allowed_relations = (
-        ALLOWED_RELATIONS_BY_RESOURCE[
-            request.resource_type
-        ]
-    )
-
-    # --------------------------------------------------------
-    # 원문
-    # --------------------------------------------------------
-
-    normalized_content = (
-        normalize_text(
-            request.content
-        )
-    )
-
-    # --------------------------------------------------------
-    # 중복 확인
-    # --------------------------------------------------------
-
-    seen: set[
-        tuple[str, RelationType]
-    ] = set()
-
-    # --------------------------------------------------------
-    # Mapping 검증
-    # --------------------------------------------------------
-
-    for index, mapping in enumerate(
-        response.mappings,
-        start=1,
-    ):
-
-        normalized_skill = (
-            normalize_text(
-                mapping.skill_name
+        raise ValueError(
+            (
+                "resource_id mismatch: "
+                f"input={mapping_input.resource_id}, "
+                f"output={mapping_output.resource_id}"
             )
         )
 
-        # --------------------------------------------
-        # Skill 사전에 존재?
-        # --------------------------------------------
+
+    # --------------------------------------------------------
+    # 2. source_document_id
+    # --------------------------------------------------------
+
+    if (
+        mapping_input.source_document_id
+        is not None
+        and mapping_output.source_document_id
+        is not None
+        and mapping_input.source_document_id
+        != mapping_output.source_document_id
+    ):
+        raise ValueError(
+            (
+                "source_document_id mismatch: "
+                f"input={mapping_input.source_document_id}, "
+                f"output={mapping_output.source_document_id}"
+            )
+        )
+
+
+    # --------------------------------------------------------
+    # 3. 허용 Skill
+    # --------------------------------------------------------
+
+    allowed_skill_names = {
+        skill.name.strip().lower()
+
+        for skill
+        in mapping_input.allowed_skills
+    }
+
+
+    # --------------------------------------------------------
+    # 4. 허용 relation
+    # --------------------------------------------------------
+
+    allowed_relations = (
+        ALLOWED_RELATIONS_BY_RESOURCE_TYPE[
+            mapping_input.resource_type
+        ]
+    )
+
+
+    # --------------------------------------------------------
+    # 5. 각 매핑 검증
+    # --------------------------------------------------------
+
+    seen_pairs: set[
+        tuple[str, str]
+    ] = set()
+
+
+    for mapping in (
+        mapping_output.mappings
+    ):
+
+        normalized_skill = (
+            mapping.skill_name
+            .strip()
+            .lower()
+        )
+
 
         if (
             normalized_skill
             not in allowed_skill_names
         ):
-
-            errors.append(
-                f"{index}번 mapping: "
-                f"등록되지 않은 Skill "
-                f"'{mapping.skill_name}'"
+            raise ValueError(
+                (
+                    "Skill DB에 없는 Skill: "
+                    f"{mapping.skill_name}"
+                )
             )
 
-        # --------------------------------------------
-        # 관계 유형이 Resource에 적합?
-        # --------------------------------------------
 
         if (
             mapping.relation_type
             not in allowed_relations
         ):
-
-            errors.append(
-                f"{index}번 mapping: "
-                f"{request.resource_type.value}에는 "
-                f"{mapping.relation_type.value} "
-                f"관계를 사용할 수 없습니다."
+            raise ValueError(
+                (
+                    "허용되지 않은 relation_type: "
+                    f"resource_type="
+                    f"{mapping_input.resource_type}, "
+                    f"relation_type="
+                    f"{mapping.relation_type}"
+                )
             )
 
-        # --------------------------------------------
-        # Evidence가 실제 원문에 존재?
-        # --------------------------------------------
 
-        normalized_evidence = (
-            normalize_text(
-                mapping.evidence_text
-            )
-        )
-
-        if (
-            normalized_evidence
-            not in normalized_content
+        if not (
+            mapping.evidence_text
+            .strip()
         ):
-
-            errors.append(
-                f"{index}번 mapping: "
-                f"evidence_text가 "
-                f"원문에서 확인되지 않습니다."
+            raise ValueError(
+                (
+                    "evidence_text가 "
+                    "비어 있습니다."
+                )
             )
 
-        # --------------------------------------------
-        # 중복 Mapping?
-        # --------------------------------------------
 
-        mapping_key = (
+        pair = (
             normalized_skill,
-            mapping.relation_type,
+            mapping.relation_type.value,
         )
 
-        if mapping_key in seen:
 
-            errors.append(
-                f"{index}번 mapping: "
-                f"동일 Skill + relation_type "
-                f"중복입니다."
+        if pair in seen_pairs:
+            raise ValueError(
+                (
+                    "중복 Skill 매핑: "
+                    f"{mapping.skill_name} / "
+                    f"{mapping.relation_type}"
+                )
             )
 
-        seen.add(
-            mapping_key
+
+        seen_pairs.add(
+            pair
         )
-
-    # --------------------------------------------------------
-    # unmapped_skill이 이미 정식 Skill이면 오류
-    # --------------------------------------------------------
-
-    for skill_name in (
-        response.unmapped_skills
-    ):
-
-        if (
-            normalize_text(
-                skill_name
-            )
-            in allowed_skill_names
-        ):
-
-            errors.append(
-                f"unmapped_skills의 "
-                f"'{skill_name}'은 이미 "
-                f"Skill 사전에 존재합니다."
-            )
-
-    return errors

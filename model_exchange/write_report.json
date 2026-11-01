@@ -1,0 +1,25 @@
+{
+  "input_file": "model_exchange\\job_mapping_input.json",
+  "output_file": "model_exchange\\job_mapping_output.mock.json",
+  "mapping_method": "team_model_v1",
+  "save_mode": false,
+  "plan": [
+    {
+      "resource_id": 93,
+      "resource_type": "JOB",
+      "resource_name": "【JOBHAKU KOREA】일본,주식회사 후지코시_AI엔지니어 - 공고 상세보기",
+      "skill_id": 23,
+      "skill_name": "Deep Learning",
+      "relation_type": "RELATED",
+      "evidence_text": "딥러닝",
+      "confidence": 0.99,
+      "reason": "Mock exact string match",
+      "source_document_id": 175,
+      "mapping_method": "team_model_v1",
+      "action": "INSERT",
+      "existing_resource_skill_id": null
+    }
+  ],
+  "skipped": [],
+  "applied_counts": null
+}
