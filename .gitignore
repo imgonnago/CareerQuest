@@ -11,6 +11,10 @@ __pycache__/
 # Environment variables / secrets
 .env
 
+data/raw/
+data/runtime/
+data/processed/
+
 # PostgreSQL local data
 postgres_data/
 
