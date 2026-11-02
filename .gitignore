@@ -14,6 +14,9 @@ __pycache__/
 data/raw/
 data/runtime/
 data/processed/
+data/source/curriculum/*.pdf
+model_exchange/*.json
+skill_check.txt
 
 # PostgreSQL local data
 postgres_data/
