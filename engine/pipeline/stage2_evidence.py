@@ -22,6 +22,7 @@
 import json
 import re
 import time
+from collections import Counter
 
 from pydantic import BaseModel, Field
 
@@ -34,12 +35,16 @@ from engine.schemas.job import TargetJob
 from engine.tools.requirements import RequirementSearchResult, fetch_texts, search_requirements
 
 # 역할별 LLM 설정
-PLANNER = LLMConfig(temperature=0.3)
+PLANNER = LLMConfig(temperature=0)  # [43] 0.3·0.2는 실행마다 검색어·문서가 바뀌어 편차·시간만 늘고 품질은 그대로 (0.2 3회: 83~175초)
 SELECTOR = LLMConfig(temperature=0)
-READER = LLMConfig(temperature=0)
+# [36] 같은 카드를 되풀이하다 컨텍스트 끝(5만 자, 400초)까지 가는 경우가 있어 출력 상한을 둔다.
+# 정상 출력은 카드 25장(인용이 길면 1만 7천 자) 안팎 6천 토큰까지 나옴
+READER = LLMConfig(temperature=0, num_predict=8192)
 
 PER_SOURCE = 10         # 검색 소스별 결과 수
-READ_BUDGET_CHARS = 40_000  # 읽기 LLM 1회 입력 분량. 한국어 약 2자 = 1토큰 → 2만 토큰 남짓 (num_ctx 32768)
+# 읽기 LLM 1회 입력 분량. 한국어 약 2자 = 1토큰 → 1만 2천 토큰 남짓 (num_ctx 32768)
+# [42] 40,000자(문서 11건)씩 읽히면 출력이 길어져 상한에 걸리고 D번호를 헷갈림 → 25,000자로 줄임
+READ_BUDGET_CHARS = 25_000
 
 # 추출 루프
 # [33] 카드 총수(TARGET_CARDS 15) 대신 가이드 슬롯별 채울 문서 수. 슬롯 이름 → (세는 카드 분류, 채울 문서 수). 합계 16
@@ -60,6 +65,7 @@ FIRST_QUERIES = {"채용 요건": 2, "공모전·대외활동": 3}  # 없는 슬
 NEXT_QUERIES = {"공모전·대외활동": 2}                   # 없는 슬롯은 1
 SELECT_PER_SLOT = 2     # 슬롯마다 한 바퀴에 고를 문서 상한 (채울 수가 1 남았으면 1)
 MIN_READABLE = 5        # [38] 슬롯 목록에 본문 가능 문서가 이만큼 있으면 요약만 있는 문서(네이버 등)는 목록에서 뺀다
+MAX_CARDS_PER_DOC = 8   # [43] 문서 하나에서 남길 카드 상한 (RAG 구현기 하나에서 기술 이름 20개가 쏟아져 표를 덮음). 프롬프트에도 적음
 MAX_ROUNDS = 3          # 바퀴 상한
 MAX_SECONDS = 90        # 2단계 시간 상한. 넘으면 새 바퀴를 시작하지 않음
 
@@ -141,17 +147,40 @@ def _norm(s: str) -> str:
     return re.sub(r"[\s\"'“”‘’]", "", s)
 
 
-def verify(draft: CardDraft, pool: EvidencePool) -> EvidenceCard | None:
-    """인용이 원문에 있으면 EvidenceCard, 없으면 None."""
-    doc = pool.docs.get(draft.doc.strip("[] "))
-    if doc is None or not _norm(draft.quote):
-        return None
+def _source(pool: EvidencePool, num: str) -> str:
+    """대조용 원문: 본문, 없으면 제목+요약."""
+    doc = pool.docs[num]
     text = pool.texts.get(doc.doc_id)
-    source = text if text is not None else f"{doc.title} {doc.snippet}"
-    if _norm(draft.quote) not in _norm(source):
+    return text if text is not None else f"{doc.title} {doc.snippet}"
+
+
+# [44] 채용 전형 절차. 프롬프트로 "전형 절차는 기업정보"라고 해도 기술스택·자격요건으로 쓰는 경우가 잦아 코드가 고친다
+SELECTION_STEP = re.compile(r"코딩\s*테스트|인적성|Fit\s*Test|면접|직무\s*특화\s*검사|서류\s*전형|필기\s*전형|AI\s*역량\s*검사", re.I)
+SELECTION_FIX_CATEGORIES = {"기술스택", "자격요건", "우대사항", "기타"}  # 대외활동("AI 면접 경진대회") 등은 그대로
+
+
+def verify(draft: CardDraft, pool: EvidencePool, batch: list[str] = ()) -> EvidenceCard | None:
+    """인용이 원문에 있으면 EvidenceCard, 없으면 None.
+
+    [42] 적힌 문서에 인용이 없으면 같이 읽은 문서(batch)에서 찾고, 한 문서에만 있으면 그 문서로 고친다(draft.doc도 고침).
+    문서 10건 남짓을 한 번에 읽히면 9B 모델이 다른 문서의 인용을 한 D번호로 몰아 적는다 (19장 중 19장이 D104).
+    """
+    num = draft.doc.strip("[] ")
+    quote = _norm(draft.quote)
+    if num not in pool.docs or not quote:
         return None
+    if quote not in _norm(_source(pool, num)):
+        found = [n for n in batch if n != num and n in pool.docs and quote in _norm(_source(pool, n))]
+        if len(found) != 1:
+            return None
+        num = draft.doc = found[0]
+    doc = pool.docs[num]
+    text = pool.texts.get(doc.doc_id)
+    category = draft.category
+    if category in SELECTION_FIX_CATEGORIES and SELECTION_STEP.search(draft.item):
+        category = "기업정보"
     return EvidenceCard(
-        doc_id=doc.doc_id, category=draft.category, company=draft.company, item=draft.item,
+        doc_id=doc.doc_id, category=category, company=draft.company, item=draft.item,
         quote=draft.quote, evidence_level="fulltext" if text is not None else "snippet",
     )
 
@@ -166,6 +195,7 @@ class ExtractionResult(BaseModel):
     query_slots: dict[str, str] = Field(default_factory=dict, description="[37] 검색어 → 그 검색어를 만든 슬롯")
     slots: dict[str, int] = Field(default_factory=dict, description="[33] 슬롯별 채운 근거 문서 수")
     not_school: int = Field(default=0, description="[33] 교과목·교내프로그램 카드인데 건양대 문서가 아니라 버린 수")
+    over_cap: int = Field(default=0, description="[43] 문서당 카드 상한(MAX_CARDS_PER_DOC)을 넘어 버린 수")
     rounds: list["RoundLog"] = Field(default_factory=list, description="추출 루프 바퀴별 기록")
     timings: dict[str, float] = Field(description="단계별 소요 시간(초, 바퀴 합계)")
 
@@ -253,6 +283,25 @@ def _batches(pool: EvidencePool, nums: list[str]) -> list[list[str]]:
     return batches
 
 
+def _salvage_cards(content: str) -> list[CardDraft]:
+    """[36] 잘린 JSON에서 끝까지 완성된 카드 객체만 살린다. 되풀이된 카드(같은 문서·인용)는 한 번만."""
+    dec, out, seen = json.JSONDecoder(), [], set()
+    i = content.find("[")
+    while i != -1:
+        j = content.find("{", i)
+        if j == -1:
+            break
+        try:
+            obj, i = dec.raw_decode(content, j)
+            card = CardDraft.model_validate(obj)
+        except ValueError:  # 잘린 마지막 카드, 스키마에 안 맞는 객체
+            break
+        if (card.doc, card.quote) not in seen:
+            seen.add((card.doc, card.quote))
+            out.append(card)
+    return out
+
+
 def read_cards(target: str, pool: EvidencePool, nums: list[str], log=print,
                slot_of: dict[str, str] | None = None) -> list[CardDraft]:
     """읽기 LLM: 고른 문서 전체를 읽고 근거 카드 초안을 낸다. slot_of = D번호 → 고른 슬롯 ([37] 참고용으로 보여 줌)."""
@@ -265,8 +314,10 @@ def read_cards(target: str, pool: EvidencePool, nums: list[str], log=print,
         msg = chat(messages, READER, format=CardDraftList.model_json_schema())
         try:
             drafts += CardDraftList.model_validate(json.loads(msg["content"])).cards
-        except ValueError:  # [36] 출력이 반복되다 컨텍스트 끝에서 잘려 JSON이 깨지는 경우 → 그 묶음만 버림
-            log(f"읽기 출력이 JSON이 아님 ({len(msg['content'])}자) → 문서 {batch} 건너뜀")
+        except ValueError:  # [36] 출력이 반복되다 num_predict에서 잘려 JSON이 깨지는 경우 → 완성된 카드만 살림
+            saved = _salvage_cards(msg["content"])
+            drafts += saved
+            log(f"읽기 출력이 잘림 ({len(msg['content'])}자) → 완성된 카드 {len(saved)}장만 살림 (문서 {batch})")
     return drafts
 
 
@@ -310,6 +361,7 @@ def extract_evidence(job: TargetJob, log=print) -> ExtractionResult:
     queries, read, selected_all, cards, rejected, rounds = [], set(), [], [], [], []
     keys: set[tuple[str, str]] = set()  # 카드 중복 확인 (doc_id, quote) — 3단계 dedup_cards와 같은 기준
     not_school = 0
+    over_cap = 0
     start = time.time()
 
     used: dict[str, str] = {}  # 검색어 → 슬롯
@@ -354,8 +406,9 @@ def extract_evidence(job: TargetJob, log=print) -> ExtractionResult:
         timings["read"] += time.time() - t
 
         new_cards = 0
+        per_doc = Counter(c.doc_id for c in cards)
         for draft in drafts:
-            card = verify(draft, pool)
+            card = verify(draft, pool, selected)
             if card is None:
                 rejected.append(draft)
                 continue
@@ -364,6 +417,11 @@ def extract_evidence(job: TargetJob, log=print) -> ExtractionResult:
                     pool.docs[draft.doc.strip("[] ")], pool.texts.get(card.doc_id)):
                 not_school += 1
                 continue
+            # [43] 문서당 카드 상한. LLM이 중요한 것부터 쓰게 했으므로 앞에서부터 남긴다
+            if per_doc[card.doc_id] >= MAX_CARDS_PER_DOC:
+                over_cap += 1
+                continue
+            per_doc[card.doc_id] += 1
             cards.append(card)
             if (card.doc_id, _norm(card.quote)) not in keys:
                 keys.add((card.doc_id, _norm(card.quote)))
@@ -382,7 +440,7 @@ def extract_evidence(job: TargetJob, log=print) -> ExtractionResult:
 
     return ExtractionResult(
         job=job, docs=list(pool.docs.values()), selected=[pool.docs[n].doc_id for n in selected_all],
-        cards=cards, rejected=rejected, queries=queries, query_slots=used, rounds=rounds, not_school=not_school,
+        cards=cards, rejected=rejected, queries=queries, query_slots=used, rounds=rounds, not_school=not_school, over_cap=over_cap,
         slots={slot: len(d) for slot, d in slot_docs(cards).items()},
         timings={k: round(v, 1) for k, v in timings.items()},
     )

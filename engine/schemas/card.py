@@ -13,12 +13,14 @@ Category = Literal["자격요건", "우대사항", "기술스택", "자격증", 
 
 
 class CardDraft(BaseModel):
+    # [42] 출력 순서 = 칸 순서. category를 먼저 쓰면 내용을 보기 전에 분류가 정해져 한 분류(기술스택)로 몰림
+    #      → 인용(quote)과 item을 먼저 쓰고 분류를 고르게 함
     doc: Annotated[str, StringConstraints(pattern=r"^D[0-9]+$")] = Field(description="근거 문서 번호만. 예: D3")
-    category: Category
-    company: str | None = Field(default=None, description="문서에 나온 기업명. 없으면 null")
+    quote: str = Field(description="문서에 적힌 문장을 바꾸지 않고 그대로 옮긴 인용")
     # [27] "핵심 항목 한 줄" → 공고 직무명·기업명을 쓰는 경우가 있어 짧은 요구사항 이름으로 좁힘
     item: str = Field(description="quote가 요구하는 자격증·기술·조건 또는 과목·프로그램·공모전·프로젝트의 짧은 이름. 공고 직무명·기업명 금지. 예: 정보처리기사, Spring Boot, TOEIC Speaking 120, 로봇공학개론")
-    quote: str = Field(description="문서에 적힌 문장을 바꾸지 않고 그대로 옮긴 인용")
+    category: Category
+    company: str | None = Field(default=None, description="문서에 나온 기업명. 없으면 null")
 
 
 class CardDraftList(BaseModel):
