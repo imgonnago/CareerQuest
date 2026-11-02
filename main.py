@@ -3,12 +3,27 @@ from __future__ import annotations
 from typing import Any
 
 import uvicorn
-from fastapi import FastAPI, HTTPException
-from fastapi.responses import HTMLResponse
+from fastapi import (
+    FastAPI,
+    HTTPException,
+)
+from fastapi.responses import (
+    HTMLResponse,
+)
 from sqlalchemy import text
-from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.exc import (
+    SQLAlchemyError,
+)
 
 from src.db.database import engine
+
+from src.gap_service import (
+    GapInputError,
+    GapRequest,
+    GapResultItem,
+    calculate_gap_request,
+)
+
 from src.mapping.student_experience_skill_bridge import (
     build_mapping_input,
 )
@@ -16,78 +31,129 @@ from src.mapping.student_experience_skill_bridge import (
 
 app = FastAPI(
     title="CareerQuest",
+
     description=(
-        "CareerQuest DB 및 모델 연동 확인용 "
-        "Read-Only API"
+        "CareerQuest DB 조회 및 "
+        "AI 모델 연동 API"
     ),
-    version="0.1.0",
+
+    version="0.2.0",
 )
 
 
 # ============================================================
-# DB 조회 공통 함수
+# DB 조회 공통
 # ============================================================
 
 def fetch_all(
     sql: str,
-    params: dict[str, Any] | None = None,
-) -> list[dict[str, Any]]:
+    params: dict[
+        str,
+        Any,
+    ] | None = None,
+) -> list[
+    dict[
+        str,
+        Any,
+    ]
+]:
 
     try:
+
         with engine.connect() as conn:
+
             rows = (
                 conn.execute(
-                    text(sql),
-                    params or {},
+                    text(
+                        sql
+                    ),
+                    params
+                    or {},
                 )
                 .mappings()
                 .all()
             )
 
         return [
-            dict(row)
+            dict(
+                row
+            )
+
             for row in rows
         ]
 
     except SQLAlchemyError as error:
+
         raise HTTPException(
             status_code=500,
-            detail=f"DB 조회 실패: {error}",
+
+            detail=(
+                f"DB 조회 실패: "
+                f"{error}"
+            ),
         ) from error
 
 
 def fetch_one(
     sql: str,
-    params: dict[str, Any] | None = None,
-) -> dict[str, Any] | None:
 
-    rows = fetch_all(
-        sql,
-        params,
+    params: dict[
+        str,
+        Any,
+    ] | None = None,
+) -> dict[
+    str,
+    Any,
+] | None:
+
+    rows = (
+        fetch_all(
+            sql,
+            params,
+        )
     )
 
     if not rows:
         return None
 
-    return rows[0]
+    return rows[
+        0
+    ]
 
 
 def fetch_scalar(
     sql: str,
-    params: dict[str, Any] | None = None,
+
+    params: dict[
+        str,
+        Any,
+    ] | None = None,
 ):
 
     try:
+
         with engine.connect() as conn:
-            return conn.execute(
-                text(sql),
-                params or {},
-            ).scalar()
+
+            return (
+                conn.execute(
+                    text(
+                        sql
+                    ),
+                    params
+                    or {},
+                )
+                .scalar()
+            )
 
     except SQLAlchemyError as error:
+
         raise HTTPException(
             status_code=500,
-            detail=f"DB 조회 실패: {error}",
+
+            detail=(
+                f"DB 조회 실패: "
+                f"{error}"
+            ),
         ) from error
 
 
@@ -97,8 +163,14 @@ def fetch_scalar(
 
 @app.get(
     "/",
-    response_class=HTMLResponse,
-    tags=["System"],
+
+    response_class=(
+        HTMLResponse
+    ),
+
+    tags=[
+        "System"
+    ],
 )
 def home() -> str:
 
@@ -108,15 +180,23 @@ def home() -> str:
     <html lang="ko">
 
     <head>
+
         <meta charset="utf-8">
-        <title>CareerQuest</title>
+
+        <title>
+            CareerQuest
+        </title>
 
         <style>
+
             body {
                 max-width: 900px;
                 margin: 50px auto;
                 padding: 0 20px;
-                font-family: Arial, "Malgun Gothic", sans-serif;
+                font-family:
+                    Arial,
+                    "Malgun Gothic",
+                    sans-serif;
                 line-height: 1.7;
             }
 
@@ -125,46 +205,75 @@ def home() -> str:
                 padding: 3px 6px;
                 border-radius: 4px;
             }
+
         </style>
+
     </head>
 
     <body>
 
-        <h1>CareerQuest</h1>
+        <h1>
+            CareerQuest
+        </h1>
 
         <p>
-            CareerQuest DB / 모델 연동 확인용
-            Read-Only API
+            CareerQuest DB 조회 및
+            AI 모델 연동 API
         </p>
 
-        <h2>바로가기</h2>
+        <h2>
+            바로가기
+        </h2>
 
         <p>
-            <a href="/docs">Swagger API 문서</a>
-        </p>
-
-        <p>
-            <a href="/api/summary">DB 요약</a>
-        </p>
-
-        <p>
-            <a href="/api/skills">Skill 사전</a>
-        </p>
-
-        <p>
-            <a href="/api/job-roles">JobRole</a>
+            <a href="/docs">
+                Swagger API 문서
+            </a>
         </p>
 
         <p>
-            <a href="/api/students">학생</a>
+            <a href="/api/summary">
+                DB 요약
+            </a>
+        </p>
+
+        <p>
+            <a href="/api/skills">
+                Skill 사전
+            </a>
+        </p>
+
+        <p>
+            <a href="/api/job-roles">
+                JobRole
+            </a>
+        </p>
+
+        <p>
+            <a href="/api/students">
+                학생
+            </a>
+        </p>
+
+        <p>
+            <a href="/api/gap/contract">
+                GAP 연동 계약
+            </a>
         </p>
 
         <hr>
 
         <p>
-            현재 DEMO:
-            <code>student_id=1</code>,
-            <code>experience_id=1</code>
+            GAP 계산은 모델팀이 전달한
+            <code>skill_id</code>와
+            학생의
+            <code>StudentSkill</code>을
+            비교합니다.
+        </p>
+
+        <p>
+            최종 추천 판단은
+            AI 모델이 담당합니다.
         </p>
 
     </body>
@@ -179,15 +288,23 @@ def home() -> str:
 
 @app.get(
     "/health",
-    tags=["System"],
+
+    tags=[
+        "System"
+    ],
 )
 def health() -> dict:
 
     return {
-        "status": "ok",
+        "status":
+            "ok",
+
         "database":
             fetch_scalar(
-                "SELECT current_database()"
+                (
+                    "SELECT "
+                    "current_database()"
+                )
             ),
     }
 
@@ -198,59 +315,87 @@ def health() -> dict:
 
 @app.get(
     "/api/summary",
-    tags=["Database"],
+
+    tags=[
+        "Database"
+    ],
 )
 def database_summary() -> dict:
 
-    resources = fetch_all(
-        """
-        SELECT
-            resource_type,
-            COUNT(*) AS total,
-            COUNT(*) FILTER (
-                WHERE is_active = TRUE
-            ) AS active
+    resources = (
+        fetch_all(
+            """
+            SELECT
+                resource_type,
 
-        FROM resource
+                COUNT(*) AS total,
 
-        GROUP BY resource_type
-        ORDER BY resource_type
-        """
+                COUNT(*) FILTER (
+                    WHERE is_active = TRUE
+                ) AS active
+
+            FROM resource
+
+            GROUP BY
+                resource_type
+
+            ORDER BY
+                resource_type
+            """
+        )
     )
 
     return {
         "database":
             fetch_scalar(
-                "SELECT current_database()"
+                (
+                    "SELECT "
+                    "current_database()"
+                )
             ),
 
         "skill_count":
             fetch_scalar(
                 """
-                SELECT COUNT(*)
+                SELECT
+                    COUNT(*)
+
                 FROM skill
-                WHERE is_active = TRUE
+
+                WHERE
+                    is_active = TRUE
                 """
             ),
 
         "job_role_count":
             fetch_scalar(
                 """
-                SELECT COUNT(*)
+                SELECT
+                    COUNT(*)
+
                 FROM job_role
-                WHERE is_active = TRUE
+
+                WHERE
+                    is_active = TRUE
                 """
             ),
 
         "student_count":
             fetch_scalar(
-                "SELECT COUNT(*) FROM student"
+                """
+                SELECT
+                    COUNT(*)
+
+                FROM student
+                """
             ),
 
         "student_experience_count":
             fetch_scalar(
                 """
-                SELECT COUNT(*)
+                SELECT
+                    COUNT(*)
+
                 FROM student_experience
                 """
             ),
@@ -258,7 +403,9 @@ def database_summary() -> dict:
         "student_skill_count":
             fetch_scalar(
                 """
-                SELECT COUNT(*)
+                SELECT
+                    COUNT(*)
+
                 FROM student_skill
                 """
             ),
@@ -274,7 +421,10 @@ def database_summary() -> dict:
 
 @app.get(
     "/api/skills",
-    tags=["Skill"],
+
+    tags=[
+        "Skill"
+    ],
 )
 def skills() -> list[dict]:
 
@@ -295,7 +445,8 @@ def skills() -> list[dict]:
         FROM skill s
 
         LEFT JOIN skill_alias sa
-            ON sa.skill_id = s.skill_id
+            ON sa.skill_id =
+               s.skill_id
 
         WHERE
             s.is_active = TRUE
@@ -318,7 +469,10 @@ def skills() -> list[dict]:
 
 @app.get(
     "/api/job-roles",
-    tags=["Job Role"],
+
+    tags=[
+        "Job Role"
+    ],
 )
 def job_roles() -> list[dict]:
 
@@ -330,20 +484,24 @@ def job_roles() -> list[dict]:
             jr.category,
 
             COUNT(
-                DISTINCT rjr.resource_id
+                DISTINCT
+                rjr.resource_id
             ) AS mapped_jobs,
 
             COUNT(
-                DISTINCT rs.skill_id
+                DISTINCT
+                rs.skill_id
             ) AS role_skill_count
 
         FROM job_role jr
 
         LEFT JOIN resource_job_role rjr
-            ON rjr.job_role_id = jr.job_role_id
+            ON rjr.job_role_id =
+               jr.job_role_id
 
         LEFT JOIN role_skill rs
-            ON rs.job_role_id = jr.job_role_id
+            ON rs.job_role_id =
+               jr.job_role_id
 
         WHERE
             jr.is_active = TRUE
@@ -365,7 +523,10 @@ def job_roles() -> list[dict]:
 
 @app.get(
     "/api/students",
-    tags=["Student"],
+
+    tags=[
+        "Student"
+    ],
 )
 def students() -> list[dict]:
 
@@ -381,19 +542,25 @@ def students() -> list[dict]:
             st.school_year,
             st.gpa,
 
-            jr.job_role_id AS target_job_role_id,
-            jr.name AS target_job_role
+            jr.job_role_id
+                AS target_job_role_id,
+
+            jr.name
+                AS target_job_role
 
         FROM student st
 
         LEFT JOIN university u
-            ON u.university_id = st.university_id
+            ON u.university_id =
+               st.university_id
 
         LEFT JOIN department d
-            ON d.department_id = st.department_id
+            ON d.department_id =
+               st.department_id
 
         LEFT JOIN job_role jr
-            ON jr.job_role_id = st.target_job_role_id
+            ON jr.job_role_id =
+               st.target_job_role_id
 
         ORDER BY
             st.student_id
@@ -402,8 +569,14 @@ def students() -> list[dict]:
 
 
 @app.get(
-    "/api/students/{student_id}/resources",
-    tags=["Student"],
+    (
+        "/api/students/"
+        "{student_id}/resources"
+    ),
+
+    tags=[
+        "Student"
+    ],
 )
 def student_resources(
     student_id: int,
@@ -425,17 +598,21 @@ def student_resources(
         FROM student_resource sr
 
         JOIN resource r
-            ON r.resource_id = sr.resource_id
+            ON r.resource_id =
+               sr.resource_id
 
         WHERE
-            sr.student_id = :student_id
+            sr.student_id =
+                :student_id
 
         ORDER BY
             r.resource_type,
             r.name
         """,
+
         {
-            "student_id": student_id
+            "student_id":
+                student_id,
         },
     )
 
@@ -445,8 +622,14 @@ def student_resources(
 # ============================================================
 
 @app.get(
-    "/api/students/{student_id}/experiences",
-    tags=["Student Experience"],
+    (
+        "/api/students/"
+        "{student_id}/experiences"
+    ),
+
+    tags=[
+        "Student Experience"
+    ],
 )
 def student_experiences(
     student_id: int,
@@ -457,23 +640,28 @@ def student_experiences(
         SELECT
             experience_id,
             student_id,
+
             experience_type,
             title,
             organization,
             description,
+
             start_date,
             end_date
 
         FROM student_experience
 
         WHERE
-            student_id = :student_id
+            student_id =
+                :student_id
 
         ORDER BY
             experience_id
         """,
+
         {
-            "student_id": student_id
+            "student_id":
+                student_id,
         },
     )
 
@@ -483,8 +671,14 @@ def student_experiences(
 # ============================================================
 
 @app.get(
-    "/api/students/{student_id}/skills",
-    tags=["Student Skill"],
+    (
+        "/api/students/"
+        "{student_id}/skills"
+    ),
+
+    tags=[
+        "Student Skill"
+    ],
 )
 def student_skills(
     student_id: int,
@@ -506,27 +700,33 @@ def student_skills(
         FROM student_skill ss
 
         JOIN skill s
-            ON s.skill_id = ss.skill_id
+            ON s.skill_id =
+               ss.skill_id
 
         WHERE
-            ss.student_id = :student_id
+            ss.student_id =
+                :student_id
 
         ORDER BY
             s.name
         """,
+
         {
-            "student_id": student_id
+            "student_id":
+                student_id,
         },
     )
 
 
-# ============================================================
-# Student Skill Evidence
-# ============================================================
-
 @app.get(
-    "/api/students/{student_id}/skill-evidence",
-    tags=["Student Skill"],
+    (
+        "/api/students/"
+        "{student_id}/skill-evidence"
+    ),
+
+    tags=[
+        "Student Skill"
+    ],
 )
 def skill_evidence(
     student_id: int,
@@ -570,45 +770,61 @@ def skill_evidence(
                sse.experience_id
 
         WHERE
-            ss.student_id = :student_id
+            ss.student_id =
+                :student_id
 
         ORDER BY
             s.name,
             sse.evidence_id
         """,
+
         {
-            "student_id": student_id
+            "student_id":
+                student_id,
         },
     )
 
 
 # ============================================================
-# Model
+# StudentExperience -> Skill 모델 입력
 # ============================================================
 
 @app.get(
-    "/api/model/experience/{experience_id}/input",
-    tags=["Model"],
+    (
+        "/api/model/experience/"
+        "{experience_id}/input"
+    ),
+
+    tags=[
+        "Model"
+    ],
 )
 def model_input(
     experience_id: int,
 ) -> dict:
 
     try:
+
         return build_mapping_input(
             experience_id
         )
 
     except Exception as error:
+
         raise HTTPException(
             status_code=404,
-            detail=str(error),
+            detail=str(
+                error
+            ),
         ) from error
 
 
 @app.get(
     "/api/model/contract",
-    tags=["Model"],
+
+    tags=[
+        "Model"
+    ],
 )
 def model_contract() -> dict:
 
@@ -618,8 +834,9 @@ def model_contract() -> dict:
 
         "description":
             (
-                "StudentExperience를 분석하여 "
-                "기존 Skill 사전의 skill_id를 반환"
+                "StudentExperience를 분석해 "
+                "CareerQuest Skill DB에 존재하는 "
+                "skill_id만 반환하는 계약"
             ),
 
         "output_example": {
@@ -638,7 +855,10 @@ def model_contract() -> dict:
                         1,
 
                     "evidence_text":
-                        "학생 경험 원문의 실제 문구",
+                        (
+                            "학생 경험 원문의 "
+                            "실제 문구"
+                        ),
 
                     "confidence":
                         0.95,
@@ -647,13 +867,166 @@ def model_contract() -> dict:
                         None,
 
                     "reason":
-                        "직접 사용한 Skill"
+                        "직접 사용한 Skill",
                 }
             ],
 
             "unmapped_skills":
                 [],
         },
+    }
+
+
+# ============================================================
+# SkillRow -> StudentSkill -> GAP
+# ============================================================
+
+@app.post(
+    "/api/gap/calculate",
+
+    response_model=(
+        list[
+            GapResultItem
+        ]
+    ),
+
+    tags=[
+        "Gap"
+    ],
+)
+def calculate_gap(
+    request: GapRequest,
+) -> list[dict]:
+
+    """
+    모델팀이 전달한 SkillRow의 skill_id와
+    StudentSkill을 비교해 GAP만 계산합니다.
+
+    최종 추천 순위와 추천 이유는
+    이 API에서 결정하지 않습니다.
+    """
+
+    try:
+
+        return calculate_gap_request(
+            request
+        )
+
+    except GapInputError as error:
+
+        raise HTTPException(
+            status_code=422,
+
+            detail=str(
+                error
+            ),
+        ) from error
+
+    except SQLAlchemyError as error:
+
+        raise HTTPException(
+            status_code=500,
+
+            detail=(
+                f"DB 조회 실패: "
+                f"{error}"
+            ),
+        ) from error
+
+
+@app.get(
+    "/api/gap/contract",
+
+    tags=[
+        "Gap"
+    ],
+)
+def gap_contract() -> dict:
+
+    return {
+        "description":
+            (
+                "모델팀 근거 집계 SkillRow와 "
+                "학생 StudentSkill을 "
+                "skill_id 기준으로 비교해 "
+                "GAP만 반환합니다."
+            ),
+
+        "input_example": {
+            "student_id":
+                1,
+
+            "skills": [
+                {
+                    "skill_id":
+                        23,
+                },
+                {
+                    "skill_id":
+                        41,
+
+                    "required_level":
+                        "IM",
+                },
+            ],
+
+            "level_order": [
+                "IL",
+                "IM",
+                "IH",
+            ],
+        },
+
+        "output_example": [
+            {
+                "skill_id":
+                    23,
+
+                "student_level":
+                    None,
+
+                "gap":
+                    "미보유",
+            },
+            {
+                "skill_id":
+                    41,
+
+                "student_level":
+                    "IL",
+
+                "gap":
+                    "수준부족",
+            },
+        ],
+
+        "notes": [
+            (
+                "skill_id는 모델팀이 "
+                "CareerQuest Skill DB 기준으로 "
+                "부여해 전달합니다."
+            ),
+            (
+                "백엔드는 Skill 이름을 다시 "
+                "skill_id로 추론하지 않습니다."
+            ),
+            (
+                "백엔드는 skill_id "
+                "유효성만 검증합니다."
+            ),
+            (
+                "required_level이 없으면 "
+                "보유/미보유만 판별합니다."
+            ),
+            (
+                "수준 비교가 필요하면 "
+                "level_order를 함께 전달합니다."
+            ),
+            (
+                "최종 추천 대상·순위·이유·로드맵은 "
+                "AI 모델이 담당합니다."
+            ),
+        ],
     }
 
 
@@ -665,7 +1038,10 @@ if __name__ == "__main__":
 
     uvicorn.run(
         "main:app",
+
         host="0.0.0.0",
+
         port=8000,
+
         reload=False,
     )

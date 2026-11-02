@@ -1,22 +1,42 @@
 from __future__ import annotations
 
+import argparse
 import hashlib
-import os
 import re
+
 from dataclasses import dataclass
-from pathlib import Path
+
 from typing import Any
-from urllib.parse import parse_qs, unquote, urljoin, urlparse
+
+from urllib.parse import (
+    parse_qs,
+    unquote,
+    urljoin,
+    urlparse,
+)
 
 import pymupdf
 import requests
+
 from bs4 import BeautifulSoup
-from google import genai
-from google.genai import types
-from pydantic import BaseModel, Field
-from sqlalchemy.orm import Session
+
+from pydantic import (
+    BaseModel,
+    Field,
+)
+
+from sqlalchemy.orm import (
+    Session,
+)
+
+from engine.llm import (
+    LLMConfig,
+    LLM_MODEL,
+    chat,
+)
 
 from src.db.database import engine
+
 from src.loaders.course_loader import (
     upsert_course_record,
     upsert_curriculum_document,
@@ -24,37 +44,47 @@ from src.loaders.course_loader import (
 
 
 # ============================================================
-# 기본 설정
+# 설정
 # ============================================================
 
 KONYANG_AI_CURRICULUM_PAGE = (
-    "https://ai.konyang.ac.kr/prog/curriculum/ai/sub01_05/view.do"
+    "https://ai.konyang.ac.kr/"
+    "prog/curriculum/ai/sub01_05/view.do"
 )
 
-DEFAULT_DEPARTMENT = "인공지능학과"
-DEFAULT_CURRICULUM_YEAR = 2026
-DEFAULT_REVISION_TYPE = "BASE"
+# 공식 페이지에서 PDF 자동 탐색이 실패할 때만 사용
+FALLBACK_PDF_URL = (
+    "https://ai.konyang.ac.kr/"
+    "uploads_clone/curriculum/"
+    "STB_202610201036110470.pdf"
+)
+
+DEFAULT_DEPARTMENT = (
+    "인공지능학과"
+)
+
+DEFAULT_CURRICULUM_YEAR = (
+    2026
+)
+
+DEFAULT_REVISION_TYPE = (
+    "BASE"
+)
 
 HTTP_TIMEOUT = 30
 
-GEMINI_MODEL = os.getenv(
-    "GEMINI_MODEL",
-    "gemini-3.8-flash",
-)
-
 USER_AGENT = (
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-    "AppleWebKit/537.36 (KHTML, like Gecko) "
+    "Mozilla/5.0 "
+    "(Windows NT 10.0; Win64; x64) "
+    "AppleWebKit/537.36 "
+    "(KHTML, like Gecko) "
     "Chrome/150.0 Safari/537.36"
 )
 
-# 건양대 교육과정에서 확인한 실제 교과목 코드 형식
-# 예:
-# 00043L
-# 00018M
-# 61901A
-STRICT_COURSE_CODE_RE = re.compile(
-    r"^\d{5}[A-Za-z]$"
+STRICT_COURSE_CODE_RE = (
+    re.compile(
+        r"^\d{5}[A-Za-z]$"
+    )
 )
 
 BLOCKED_NAMES = {
@@ -70,112 +100,128 @@ BLOCKED_NAMES = {
 }
 
 
+CURRICULUM_LLM = (
+    LLMConfig(
+        model=(
+            LLM_MODEL
+        ),
+
+        temperature=0,
+
+        think=False,
+    )
+)
+
+
 # ============================================================
-# 데이터 구조
+# 구조
 # ============================================================
 
 @dataclass
 class CurriculumSource:
+
     page_url: str
+
     pdf_url: str
+
     file_name: str
+
     department_name: str
+
     curriculum_year: int
-    revision_type: str = DEFAULT_REVISION_TYPE
+
+    revision_type: str = (
+        DEFAULT_REVISION_TYPE
+    )
 
 
-# ============================================================
-# Gemini 구조화 출력
-# ============================================================
+class QwenCourse(
+    BaseModel
+):
 
-class GeminiCourse(BaseModel):
     source_page: int | None = None
+
     year_level: int | None = None
+
     semester: str | None = None
+
     completion_type: str | None = None
+
     course_code: str | None = None
+
     name: str
+
     credits: float | None = None
+
     theory_hours: float | None = None
+
     practice_hours: float | None = None
 
 
-class GeminiCurriculum(BaseModel):
-    courses: list[GeminiCourse] = Field(
+class QwenCurriculum(
+    BaseModel
+):
+
+    courses: list[
+        QwenCourse
+    ] = Field(
         default_factory=list
     )
 
 
 # ============================================================
-# Gemini Prompt
+# Qwen Prompt
 # ============================================================
 
-GEMINI_PROMPT = """
-당신은 대한민국 대학의 공식 교육과정 PDF를
-CareerQuest 데이터베이스용으로 정확하게 구조화하는 데이터 추출기입니다.
+QWEN_PROMPT = """
+당신은 대한민국 대학 공식 교육과정 자료를
+CareerQuest 데이터베이스용으로
+정확하게 구조화하는 데이터 추출기입니다.
 
-이 문서는 건양대학교 인공지능학과의 공식 교육과정 PDF입니다.
+아래에는 PDF에서 PyMuPDF로 추출한
+페이지별 텍스트와 표 데이터가 제공됩니다.
 
-PDF 전체를 시각적으로 확인해서 실제 교과목 행만 추출하세요.
-텍스트 레이어만 읽지 말고 표의 배치, 병합 셀,
-이미지 형태로 들어간 표도 함께 확인하세요.
+제공된 내용만 사용하고
+보이지 않는 정보를 추측하거나
+새로 만들지 마세요.
 
-각 교과목에서 다음 필드를 추출하세요.
+각 실제 교과목 행에서 다음 필드를 추출하세요.
 
-- source_page
-  PDF 페이지 번호. 첫 페이지는 1입니다.
+- source_page: PAGE 번호
+- year_level: 이수 학년
+- semester: 학기
+- completion_type: 이수구분 또는 교과영역
+- course_code: 교과목 코드
+- name: 교과목명
+- credits: 학점
+- theory_hours: 이론 시수
+- practice_hours: 실습 시수
 
-- year_level
-  이수 학년. 1, 2, 3, 4 등의 정수입니다.
+규칙:
 
-- semester
-  학기. 예: "1", "2", "하계", "동계".
-
-- completion_type
-  교과영역 또는 이수구분입니다.
-
-- course_code
-  교과목 코드입니다.
-
-- name
-  교과목명입니다.
-
-- credits
-  학점입니다.
-
-- theory_hours
-  이론 시수입니다.
-
-- practice_hours
-  실습 시수입니다.
-
-반드시 다음 규칙을 지키세요.
-
-1. PDF에 실제로 존재하는 교과목만 반환하세요.
-2. 보이지 않는 값은 추측하지 말고 null로 두세요.
-3. 표 제목, 컬럼명, 안내문, 페이지 제목은 교과목으로 만들지 마세요.
+1. 실제 교과목만 반환하세요.
+2. 확인되지 않는 값은 null로 두세요.
+3. 표 제목, 헤더, 안내문은 교과목이 아닙니다.
 4. 합계, 소계, 계, 이수학점, 졸업학점 등의 행은 제외하세요.
-5. 병합 셀의 학년, 학기, 이수구분은 해당 묶음의 뒤 행에 이어서 적용하세요.
-6. 여러 페이지에 존재하는 교과목을 모두 확인하세요.
-7. 동일한 교과목 행을 중복 생성하지 마세요.
-8. 교과목명은 PDF의 표기를 그대로 유지하세요.
-9. 학점과 시수는 가능한 경우 숫자로 반환하세요.
-10. source_page는 실제 PDF 페이지 기준으로 기록하세요.
-11. 교과목 코드와 교과목명을 서로 다른 행에서 임의로 결합하지 마세요.
-12. 설명문, 역량표, 교육목표 등에 등장하는 단어를 교과목으로 오인하지 마세요.
-13. 교과목 코드가 실제 표에서 확인되지 않으면 임의로 생성하지 마세요.
-14. 교과목 표가 아닌 페이지에서는 교과목을 생성하지 마세요.
-15. "DYT_무대분장 외 33개", "선택적 교양필수" 같은
-    분류/요약 항목은 개별 교과목으로 반환하지 마세요.
+5. 병합 셀 때문에 학년/학기가 뒤 행에서 비어 있으면 같은 표 영역의 앞 행 정보를 이어서 적용할 수 있습니다.
+6. PAGE 번호를 source_page로 사용하세요.
+7. 동일한 교과목을 중복 생성하지 마세요.
+8. 교과목명은 원문 표기를 유지하세요.
+9. course_code를 임의로 생성하지 마세요.
+10. 서로 다른 행의 코드와 이름을 임의로 결합하지 마세요.
+11. 설명문, 역량표, 교육목표 등에 등장하는 단어를 교과목으로 만들지 마세요.
+12. TEXT와 TABLE이 같은 내용을 중복 포함해도 실제 교과목은 한 번만 반환하세요.
+13. TABLE 데이터가 존재하면 행 구조 판단에 우선 활용하세요.
+14. 교과목 코드가 없는 분류/요약 항목은 반환하지 마세요.
 
 목적은 OCR 원문 복원이 아니라
-CareerQuest PostgreSQL DB에 저장할
-신뢰 가능한 교과목 데이터를 구조화하는 것입니다.
+PostgreSQL에 저장할 신뢰 가능한
+교과목 행 구조화입니다.
 """.strip()
 
 
 # ============================================================
-# 문자열 유틸
+# 문자열
 # ============================================================
 
 def clean_text(
@@ -185,121 +231,165 @@ def clean_text(
     if value is None:
         return ""
 
-    return re.sub(
-        r"\s+",
-        " ",
-        str(value),
-    ).strip()
+    return (
+        re.sub(
+            r"\s+",
+            " ",
+            str(
+                value
+            ),
+        )
+        .strip()
+    )
 
 
 def optional_text(
     value: Any,
 ) -> str | None:
 
-    value = clean_text(
-        value
+    value = (
+        clean_text(
+            value
+        )
     )
 
-    return value or None
+    return (
+        value
+        or None
+    )
 
 
 def normalize_name(
-    value: str | None,
-) -> str | None:
+    value: Any,
+) -> str:
 
-    value = optional_text(
+    return clean_text(
         value
     )
-
-    if not value:
-        return None
-
-    compact = value.replace(
-        " ",
-        "",
-    )
-
-    if compact in BLOCKED_NAMES:
-        return None
-
-    return value
 
 
 def normalize_semester(
-    value: str | None,
+    value: Any,
 ) -> str | None:
 
-    value = optional_text(
-        value
+    value = (
+        clean_text(
+            value
+        )
     )
 
     if not value:
         return None
 
     compact = (
-        value
-        .replace(
-            "학기",
+        value.replace(
+            " ",
             "",
         )
-        .strip()
     )
 
-    if compact in {
-        "1",
-        "1.0",
-    }:
-        return "1"
+    mapping = {
+        "1학기":
+            "1",
 
-    if compact in {
-        "2",
-        "2.0",
-    }:
-        return "2"
+        "2학기":
+            "2",
 
-    if "하계" in compact:
-        return "하계"
+        "1":
+            "1",
 
-    if "동계" in compact:
-        return "동계"
+        "2":
+            "2",
 
-    return value
+        "하계":
+            "하계",
+
+        "동계":
+            "동계",
+    }
+
+    return (
+        mapping.get(
+            compact,
+            value,
+        )
+    )
 
 
 def normalize_number(
-    value: float | None,
+    value: Any,
 ) -> float | None:
 
     if value is None:
         return None
 
-    value = float(
-        value
-    )
+    try:
 
-    if value < 0:
+        number = float(
+            value
+        )
+
+    except (
+        TypeError,
+        ValueError,
+    ):
+
+        text_value = (
+            clean_text(
+                value
+            )
+        )
+
+        match = (
+            re.search(
+                r"\d+(?:\.\d+)?",
+                text_value,
+            )
+        )
+
+        if not match:
+            return None
+
+        number = float(
+            match.group()
+        )
+
+    if number < 0:
         return None
 
-    return value
+    return number
 
 
 # ============================================================
-# Gemini Course -> CareerQuest Course dict
+# Course 정규화
 # ============================================================
 
 def normalize_course(
-    item: GeminiCourse,
+    item: QwenCourse,
+
     source: CurriculumSource,
+
     page_count: int,
 ) -> dict | None:
 
-    name = normalize_name(
-        item.name
+    name = (
+        normalize_name(
+            item.name
+        )
     )
 
     if not name:
         return None
 
+    if (
+        name.replace(
+            " ",
+            "",
+        )
+        in BLOCKED_NAMES
+    ):
+
+        return None
 
     source_page = (
         item.source_page
@@ -307,12 +397,15 @@ def normalize_course(
 
     if (
         source_page is None
+
         or not (
-            1 <= source_page <= page_count
+            1
+            <= source_page
+            <= page_count
         )
     ):
-        source_page = 1
 
+        source_page = 1
 
     year_level = (
         item.year_level
@@ -320,46 +413,54 @@ def normalize_course(
 
     if (
         year_level is not None
+
         and not (
-            1 <= year_level <= 6
+            1
+            <= year_level
+            <= 6
         )
     ):
+
         year_level = None
 
-
-    credits = normalize_number(
-        item.credits
+    credits = (
+        normalize_number(
+            item.credits
+        )
     )
 
-    theory_hours = normalize_number(
-        item.theory_hours
+    theory_hours = (
+        normalize_number(
+            item.theory_hours
+        )
     )
 
-    practice_hours = normalize_number(
-        item.practice_hours
+    practice_hours = (
+        normalize_number(
+            item.practice_hours
+        )
     )
-
 
     if (
         credits is not None
         and credits > 12
     ):
-        credits = None
 
+        credits = None
 
     if (
         theory_hours is not None
         and theory_hours > 20
     ):
-        theory_hours = None
 
+        theory_hours = None
 
     if (
         practice_hours is not None
         and practice_hours > 30
     ):
-        practice_hours = None
 
+        practice_hours = None
 
     return {
         "department_name":
@@ -408,16 +509,12 @@ def normalize_course(
             source_page,
 
         "source_table":
-            "gemini-pdf",
+            "qwen-local-text",
 
         "source_url":
             source.pdf_url,
     }
 
-
-# ============================================================
-# 중복 제거
-# ============================================================
 
 def deduplicate_courses(
     courses: list[dict],
@@ -431,57 +528,32 @@ def deduplicate_courses(
         tuple
     ] = set()
 
-
     for course in courses:
 
-        code = clean_text(
-            course.get(
-                "course_code"
-            )
-        ).upper()
+        key = (
+            clean_text(
+                course.get(
+                    "course_code"
+                )
+            ).upper(),
 
+            clean_text(
+                course.get(
+                    "name"
+                )
+            ),
 
-        name = clean_text(
-            course.get(
-                "name"
-            )
-        ).lower()
-
-
-        year_level = (
             course.get(
                 "year_level"
-            )
-        )
+            ),
 
-
-        semester = clean_text(
             course.get(
                 "semester"
-            )
-        ).lower()
-
-
-        if code:
-
-            key = (
-                "code",
-                code,
-            )
-
-        else:
-
-            key = (
-                "name",
-                name,
-                year_level,
-                semester,
-            )
-
+            ),
+        )
 
         if key in seen:
             continue
-
 
         seen.add(
             key
@@ -490,7 +562,6 @@ def deduplicate_courses(
         result.append(
             course
         )
-
 
     return result
 
@@ -506,52 +577,41 @@ def create_http_session(
         requests.Session()
     )
 
-
     session.headers.update(
         {
             "User-Agent":
                 USER_AGENT,
-
-            "Accept-Language":
-                "ko-KR,ko;q=0.9,en;q=0.7",
         }
     )
-
 
     return session
 
 
 # ============================================================
-# PDF URL 추출
+# PDF 탐색
 # ============================================================
-
 def extract_pdf_from_link(
-    link_value: str,
-    *,
+    href: str,
     base_url: str,
 ) -> str | None:
 
-    if not link_value:
+    href = clean_text(
+        href
+    )
+
+    if not href:
         return None
 
-
-    decoded = unquote(
-        link_value
-    )
-
-
-    absolute = urljoin(
+    absolute_url = urljoin(
         base_url,
-        link_value,
+        href,
     )
-
 
     parsed = urlparse(
-        absolute
+        absolute_url
     )
 
-
-    # 직접 PDF 링크
+    # 이미 PDF 직접 링크
     if (
         parsed.path
         .lower()
@@ -559,217 +619,196 @@ def extract_pdf_from_link(
             ".pdf"
         )
     ):
+        return absolute_url
 
-        return absolute
-
-
-    # PDF.js viewer
+    # pdf.js viewer 형태:
+    #
+    # /pdf.js/web/viewer.html
+    # ?file=/uploads/.../xxx.pdf
     query = parse_qs(
         parsed.query
     )
 
-
-    if query.get(
-        "file"
-    ):
-
-        pdf_path = unquote(
-            query[
-                "file"
-            ][0]
-        ).strip()
-
-
-        if (
-            pdf_path
-            .lower()
-            .endswith(
-                ".pdf"
-            )
-        ):
-
-            origin = (
-                f"{parsed.scheme}://"
-                f"{parsed.netloc}"
-            )
-
-
-            return urljoin(
-                origin,
-                pdf_path,
-            )
-
-
-    # onclick 등에 PDF가 들어간 경우
-    match = re.search(
-        r"(/[A-Za-z0-9_./-]+\.pdf)",
-        decoded,
-        flags=re.IGNORECASE,
+    file_values = (
+        query.get(
+            "file"
+        )
+        or []
     )
 
+    for file_value in file_values:
 
-    if match:
-
-        return urljoin(
-            base_url,
-            match.group(1),
+        file_value = unquote(
+            file_value
         )
 
+        if (
+            ".pdf"
+            not in file_value.lower()
+        ):
+            continue
+
+        return urljoin(
+            absolute_url,
+            file_value,
+        )
 
     return None
-
-
-# ============================================================
-# 건양대 공식 교육과정 PDF 탐색
-# ============================================================
 
 def discover_curriculum_pdf(
     *,
     curriculum_year: int,
     department_name: str,
-    page_url: str = (
-        KONYANG_AI_CURRICULUM_PAGE
-    ),
 ) -> CurriculumSource:
 
     session = (
         create_http_session()
     )
 
+    pdf_url: str | None = None
 
-    response = session.get(
-        page_url,
-        timeout=HTTP_TIMEOUT,
-    )
+    try:
 
-
-    response.raise_for_status()
-
-
-    if response.apparent_encoding:
-
-        response.encoding = (
-            response.apparent_encoding
-        )
-
-
-    soup = BeautifulSoup(
-        response.text,
-        "html.parser",
-    )
-
-
-    target_phrase = (
-        f"{curriculum_year}학년도 "
-        f"{department_name} 교육과정"
-    )
-
-
-    pdf_candidates: list[
-        str
-    ] = []
-
-
-    for anchor in soup.find_all(
-        "a"
-    ):
-
-        anchor_text = clean_text(
-            anchor.get_text(
-                " ",
-                strip=True,
+        response = (
+            session.get(
+                KONYANG_AI_CURRICULUM_PAGE,
+                timeout=(
+                    HTTP_TIMEOUT
+                ),
             )
         )
 
+        response.raise_for_status()
 
-        if (
-            target_phrase
-            not in anchor_text
+        soup = (
+            BeautifulSoup(
+                response.text,
+                "html.parser",
+            )
+        )
+
+        candidates: list[str] = []
+
+        # ----------------------------------------------------
+        # href 링크 탐색
+        # ----------------------------------------------------
+
+        for tag in (
+            soup.find_all(
+                href=True
+            )
         ):
 
-            continue
-
-
-        href = clean_text(
-            anchor.get(
-                "href"
+            href = clean_text(
+                tag.get(
+                    "href"
+                )
             )
-        )
 
-
-        onclick = clean_text(
-            anchor.get(
-                "onclick"
-            )
-        )
-
-
-        for value in (
-            href,
-            onclick,
-        ):
-
-            pdf_url = (
+            extracted = (
                 extract_pdf_from_link(
-                    value,
-                    base_url=page_url,
+                    href,
+                    KONYANG_AI_CURRICULUM_PAGE,
                 )
             )
 
-
-            if pdf_url:
-
-                pdf_candidates.append(
-                    pdf_url
+            if extracted:
+                candidates.append(
+                    extracted
                 )
 
+        # ----------------------------------------------------
+        # HTML 내부 문자열에 직접 들어간 PDF / viewer URL 탐색
+        # ----------------------------------------------------
 
-    pdf_candidates = list(
-        dict.fromkeys(
-            pdf_candidates
+        for raw_url in re.findall(
+            r"""(?:"|')([^"']+(?:\.pdf|viewer\.html\?file=[^"']+))(?:"|')""",
+            response.text,
+            flags=re.IGNORECASE,
+        ):
+
+            extracted = (
+                extract_pdf_from_link(
+                    raw_url,
+                    KONYANG_AI_CURRICULUM_PAGE,
+                )
+            )
+
+            if extracted:
+                candidates.append(
+                    extracted
+                )
+
+        unique_candidates = list(
+            dict.fromkeys(
+                candidates
+            )
         )
-    )
 
+        if unique_candidates:
 
-    if not pdf_candidates:
+            # 현재 인공지능학과 공식 페이지에서
+            # 발견되는 교육과정 PDF 사용
+            pdf_url = (
+                unique_candidates[
+                    0
+                ]
+            )
 
-        raise RuntimeError(
+    except requests.RequestException as exc:
+
+        print(
             (
-                "건양대 공식 페이지에서 "
-                "교육과정 PDF를 찾지 못했습니다.\n"
-                f"대상: {target_phrase}\n"
-                f"페이지: {page_url}"
+                "교육과정 페이지 "
+                "자동 탐색 실패: "
+                f"{exc}"
             )
         )
 
+    # --------------------------------------------------------
+    # 공식 페이지 구조 변경 등에 대비한 fallback
+    # --------------------------------------------------------
 
-    pdf_url = (
-        pdf_candidates[0]
-    )
+    if not pdf_url:
 
+        print(
+            (
+                "공식 페이지에서 PDF "
+                "자동 탐색 실패 "
+                "-> fallback URL 사용"
+            )
+        )
 
-    file_name = Path(
+        pdf_url = (
+            FALLBACK_PDF_URL
+        )
+
+    file_name = (
         urlparse(
             pdf_url
-        ).path
-    ).name
-
-
-    if not file_name:
-
-        file_name = (
-            f"{curriculum_year}_"
-            f"{department_name}_"
-            "교육과정.pdf"
         )
-
+        .path
+        .rsplit(
+            "/",
+            1,
+        )[
+            -1
+        ]
+        or "curriculum.pdf"
+    )
 
     return CurriculumSource(
-        page_url=page_url,
+        page_url=(
+            KONYANG_AI_CURRICULUM_PAGE
+        ),
 
-        pdf_url=pdf_url,
+        pdf_url=(
+            pdf_url
+        ),
 
-        file_name=file_name,
+        file_name=(
+            file_name
+        ),
 
         department_name=(
             department_name
@@ -778,16 +817,8 @@ def discover_curriculum_pdf(
         curriculum_year=(
             curriculum_year
         ),
-
-        revision_type=(
-            DEFAULT_REVISION_TYPE
-        ),
     )
 
-
-# ============================================================
-# PDF 다운로드
-# ============================================================
 
 def download_pdf_bytes(
     source: CurriculumSource,
@@ -797,26 +828,21 @@ def download_pdf_bytes(
         create_http_session()
     )
 
+    response = (
+        session.get(
+            source.pdf_url,
 
-    response = session.get(
-        source.pdf_url,
-
-        timeout=HTTP_TIMEOUT,
-
-        headers={
-            "Referer":
-                source.page_url,
-        },
+            timeout=(
+                HTTP_TIMEOUT
+            ),
+        )
     )
 
-
     response.raise_for_status()
-
 
     data = (
         response.content
     )
-
 
     if not data.startswith(
         b"%PDF"
@@ -824,44 +850,41 @@ def download_pdf_bytes(
 
         raise RuntimeError(
             (
-                "다운로드 결과가 PDF가 아닙니다.\n"
-                f"URL: {source.pdf_url}\n"
-                "Content-Type: "
-                f"{response.headers.get('Content-Type')}"
+                "다운로드한 파일이 "
+                "PDF가 아닙니다: "
+                f"{source.pdf_url}"
             )
         )
-
 
     return data
 
 
 # ============================================================
-# 로컬 파서 감사(audit)
-#
-# Gemini 결과와 비교하기 위한 독립 검증용.
-# 결과 확정용으로 사용하지 않는다.
+# 로컬 Audit
 # ============================================================
 
 def local_audit(
     pdf_bytes: bytes,
 ) -> dict:
 
-    document = pymupdf.open(
-        stream=pdf_bytes,
-        filetype="pdf",
-    )
+    document = (
+        pymupdf.open(
+            stream=(
+                pdf_bytes
+            ),
 
+            filetype="pdf",
+        )
+    )
 
     page_counts: dict[
         int,
         int,
     ] = {}
 
-
     course_codes: set[
         str
     ] = set()
-
 
     try:
 
@@ -875,27 +898,21 @@ def local_audit(
                 )
             )
 
-
             page_no = (
-                page_index + 1
+                page_index
+                + 1
             )
-
 
             page_codes: set[
                 str
             ] = set()
 
-
-            # ------------------------------------------------
-            # 1. PyMuPDF table detector
-            # ------------------------------------------------
-
+            # 표 탐색
             try:
 
                 finder = (
                     page.find_tables()
                 )
-
 
                 tables = (
                     getattr(
@@ -910,7 +927,6 @@ def local_audit(
 
                 tables = []
 
-
             for table in tables:
 
                 try:
@@ -923,52 +939,44 @@ def local_audit(
 
                     continue
 
-
                 for row in (
                     rows
                     or []
                 ):
 
-                    cells = [
-                        clean_text(
-                            cell
+                    for cell in row:
+
+                        token = (
+                            clean_text(
+                                cell
+                            )
                         )
-                        for cell
-                        in row
-                    ]
-
-
-                    for cell in cells:
 
                         if (
                             STRICT_COURSE_CODE_RE
                             .fullmatch(
-                                cell
+                                token
                             )
                         ):
 
                             page_codes.add(
-                                cell.upper()
+                                token.upper()
                             )
 
-
-            # ------------------------------------------------
-            # 2. 텍스트 단어에서도 코드 탐색
-            # ------------------------------------------------
-
-            words = (
+            # 텍스트 레이어에서도 코드 탐색
+            for word in (
                 page.get_text(
                     "words"
                 )
-            )
+            ):
 
-
-            for word in words:
-
-                token = clean_text(
-                    word[4]
+                token = (
+                    clean_text(
+                        word[
+                            4
+                        ]
+                    )
                 )
-
 
                 if (
                     STRICT_COURSE_CODE_RE
@@ -981,11 +989,9 @@ def local_audit(
                         token.upper()
                     )
 
-
             course_codes.update(
                 page_codes
             )
-
 
             page_counts[
                 page_no
@@ -993,16 +999,13 @@ def local_audit(
                 page_codes
             )
 
-
         page_count = (
             document.page_count
         )
 
-
     finally:
 
         document.close()
-
 
     return {
         "page_count":
@@ -1022,130 +1025,342 @@ def local_audit(
 
 
 # ============================================================
-# Gemini PDF 전체 구조화
+# PDF -> Qwen Context
 # ============================================================
 
-def extract_with_gemini(
+def build_qwen_pdf_context(
     pdf_bytes: bytes,
-    source: CurriculumSource,
-    page_count: int,
-) -> list[dict]:
+) -> str:
 
-    if not (
-        os.getenv(
-            "GEMINI_API_KEY"
-        )
-        or
-        os.getenv(
-            "GOOGLE_API_KEY"
-        )
-    ):
+    document = (
+        pymupdf.open(
+            stream=(
+                pdf_bytes
+            ),
 
-        raise RuntimeError(
-            (
-                "Gemini API 키가 없습니다.\n\n"
-                "PyCharm에서:\n"
-                "Run -> Edit Configurations -> "
-                "Environment variables\n\n"
-                "GEMINI_API_KEY=발급받은키\n"
-                "를 추가하세요."
+            filetype="pdf",
+        )
+    )
+
+    page_blocks: list[
+        str
+    ] = []
+
+    try:
+
+        for page_index in range(
+            document.page_count
+        ):
+
+            page = (
+                document.load_page(
+                    page_index
+                )
             )
+
+            page_no = (
+                page_index
+                + 1
+            )
+
+            page_text = (
+                page.get_text(
+                    "text",
+                    sort=True,
+                )
+                .strip()
+            )
+
+            table_blocks: list[
+                str
+            ] = []
+
+            table_codes: set[
+                str
+            ] = set()
+
+            try:
+
+                finder = (
+                    page.find_tables()
+                )
+
+                tables = (
+                    getattr(
+                        finder,
+                        "tables",
+                        None,
+                    )
+                    or []
+                )
+
+            except Exception:
+
+                tables = []
+
+            for (
+                table_index,
+                table,
+            ) in enumerate(
+                tables,
+                start=1,
+            ):
+
+                try:
+
+                    rows = (
+                        table.extract()
+                    )
+
+                except Exception:
+
+                    continue
+
+                row_lines: list[
+                    str
+                ] = []
+
+                for row in (
+                    rows
+                    or []
+                ):
+
+                    cells = [
+                        clean_text(
+                            cell
+                        )
+
+                        for cell in row
+                    ]
+
+                    if not any(
+                        cells
+                    ):
+                        continue
+
+                    for cell in cells:
+
+                        if (
+                            STRICT_COURSE_CODE_RE
+                            .fullmatch(
+                                cell
+                            )
+                        ):
+
+                            table_codes.add(
+                                cell.upper()
+                            )
+
+                    row_lines.append(
+                        " | ".join(
+                            cells
+                        )
+                    )
+
+                if row_lines:
+
+                    table_blocks.append(
+                        (
+                            f"[TABLE "
+                            f"{table_index}]\n"
+                            + "\n".join(
+                                row_lines
+                            )
+                        )
+                    )
+
+            page_codes = {
+                clean_text(
+                    word[
+                        4
+                    ]
+                ).upper()
+
+                for word in (
+                    page.get_text(
+                        "words"
+                    )
+                )
+
+                if (
+                    STRICT_COURSE_CODE_RE
+                    .fullmatch(
+                        clean_text(
+                            word[
+                                4
+                            ]
+                        )
+                    )
+                )
+            }
+
+            table_text = (
+                "\n\n".join(
+                    table_blocks
+                )
+                or "(표 추출 없음)"
+            )
+
+            # 표가 페이지의 모든 교과목 코드를
+            # 포함한다면 중복되는 전체 텍스트는
+            # 보내지 않아 context를 절약한다.
+            needs_text = (
+                not table_blocks
+
+                or not (
+                    page_codes
+                    .issubset(
+                        table_codes
+                    )
+                )
+            )
+
+            text_value = (
+                page_text
+
+                if needs_text
+
+                else (
+                    "(TABLE 데이터로 "
+                    "충분하여 생략)"
+                )
+            )
+
+            text_value = (
+                text_value
+                or "(텍스트 추출 없음)"
+            )
+
+            page_blocks.append(
+                (
+                    f"===== PAGE "
+                    f"{page_no} =====\n"
+
+                    f"[TABLES]\n"
+                    f"{table_text}\n\n"
+
+                    f"[TEXT]\n"
+                    f"{text_value}"
+                )
+            )
+
+    finally:
+
+        document.close()
+
+    return (
+        "\n\n".join(
+            page_blocks
         )
-
-
-    client = (
-        genai.Client()
     )
 
 
+# ============================================================
+# Qwen 구조화
+# ============================================================
+
+def extract_with_qwen(
+    pdf_bytes: bytes,
+
+    source: CurriculumSource,
+
+    page_count: int,
+) -> list[dict]:
+
+    pdf_context = (
+        build_qwen_pdf_context(
+            pdf_bytes
+        )
+    )
+
     prompt = (
-        GEMINI_PROMPT
+        QWEN_PROMPT
+
         + "\n\n"
-        + "대상 메타데이터:\n"
+        + "[대상 메타데이터]\n"
+
         + "- 학교: 건양대학교\n"
+
         + (
             f"- 학과: "
             f"{source.department_name}\n"
         )
+
         + (
             "- 교육과정 연도: "
             f"{source.curriculum_year}\n"
         )
+
         + (
             "- PDF 총 페이지: "
-            f"{page_count}\n"
+            f"{page_count}\n\n"
         )
+
+        + "[PDF 추출 데이터]\n"
+
+        + pdf_context
     )
 
+    message = (
+        chat(
+            [
+                {
+                    "role":
+                        "system",
 
-    response = (
-        client.models.generate_content(
-            model=(
-                GEMINI_MODEL
-            ),
+                    "content":
+                        (
+                            "당신은 대학 교육과정 "
+                            "구조화 데이터 추출기입니다. "
+                            "제공된 원문에 없는 정보는 "
+                            "생성하지 마세요."
+                        ),
+                },
+                {
+                    "role":
+                        "user",
 
-            contents=[
-                types.Part.from_bytes(
-                    data=(
-                        pdf_bytes
-                    ),
-
-                    mime_type=(
-                        "application/pdf"
-                    ),
-                ),
-
-                prompt,
+                    "content":
+                        prompt,
+                },
             ],
 
-            config=(
-                types.GenerateContentConfig(
-                    response_mime_type=(
-                        "application/json"
-                    ),
+            CURRICULUM_LLM,
 
-                    response_schema=(
-                        GeminiCurriculum
-                    ),
-
-                    temperature=0,
-                )
+            format=(
+                QwenCurriculum
+                .model_json_schema()
             ),
         )
     )
 
-
-    parsed = getattr(
-        response,
-        "parsed",
-        None,
+    content = (
+        clean_text(
+            message.get(
+                "content"
+            )
+        )
     )
 
+    if not content:
 
-    if parsed is None:
-
-        if not response.text:
-
-            raise RuntimeError(
-                (
-                    "Gemini가 빈 응답을 "
-                    "반환했습니다."
-                )
-            )
-
-
-        parsed = (
-            GeminiCurriculum
-            .model_validate_json(
-                response.text
+        raise RuntimeError(
+            (
+                "Qwen이 빈 응답을 "
+                "반환했습니다."
             )
         )
 
+    parsed = (
+        QwenCurriculum
+        .model_validate_json(
+            content
+        )
+    )
 
     courses: list[
         dict
     ] = []
-
 
     for item in (
         parsed.courses
@@ -1159,38 +1374,29 @@ def extract_with_gemini(
             )
         )
 
-
         if record:
 
             courses.append(
                 record
             )
 
-
-    # --------------------------------------------------------
-    # 실제 교과목이 아닌 분류/요약 행 제거
-    #
-    # 현재 건양대 교육과정표의 실제 교과목은
-    # 모두 5자리 숫자 + 영문 1자의 코드 보유
-    # --------------------------------------------------------
-
-    filtered_courses: list[
+    filtered: list[
         dict
     ] = []
 
-
     for course in courses:
 
-        course_code = clean_text(
-            course.get(
-                "course_code"
+        course_code = (
+            clean_text(
+                course.get(
+                    "course_code"
+                )
             )
-        ).upper()
-
+            .upper()
+        )
 
         if not course_code:
             continue
-
 
         if not (
             STRICT_COURSE_CODE_RE
@@ -1200,30 +1406,30 @@ def extract_with_gemini(
         ):
             continue
 
-
         course[
             "course_code"
-        ] = course_code
+        ] = (
+            course_code
+        )
 
-
-        filtered_courses.append(
+        filtered.append(
             course
         )
 
-
     return (
         deduplicate_courses(
-            filtered_courses
+            filtered
         )
     )
 
 
 # ============================================================
-# Gemini 결과 검증
+# Qwen 결과 검증
 # ============================================================
 
-def validate_gemini_result(
+def validate_qwen_result(
     courses: list[dict],
+
     audit: dict,
 ) -> dict:
 
@@ -1231,34 +1437,34 @@ def validate_gemini_result(
 
         raise RuntimeError(
             (
-                "Gemini가 교과목을 "
+                "Qwen이 교과목을 "
                 "하나도 추출하지 못했습니다."
             )
         )
 
-
-    if len(
-        courses
-    ) > 300:
+    if (
+        len(
+            courses
+        )
+        > 300
+    ):
 
         raise RuntimeError(
             (
-                "Gemini 추출량이 "
+                "Qwen 추출량이 "
                 "비정상적으로 큽니다: "
                 f"{len(courses)}개"
             )
         )
 
-
-    gemini_codes = {
+    qwen_codes = {
         clean_text(
             course.get(
                 "course_code"
             )
         ).upper()
 
-        for course
-        in courses
+        for course in courses
 
         if clean_text(
             course.get(
@@ -1267,37 +1473,21 @@ def validate_gemini_result(
         )
     }
 
-
     local_codes = (
         audit[
             "course_codes"
         ]
     )
 
-
     overlap = (
-        gemini_codes
+        qwen_codes
         & local_codes
     )
-
-
-    missing_in_gemini = sorted(
-        local_codes
-        - gemini_codes
-    )
-
-
-    gemini_only = sorted(
-        gemini_codes
-        - local_codes
-    )
-
 
     no_code_courses = [
         course
 
-        for course
-        in courses
+        for course in courses
 
         if not clean_text(
             course.get(
@@ -1306,30 +1496,15 @@ def validate_gemini_result(
         )
     ]
 
-
-    local_overlap_ratio = (
-        len(
-            overlap
-        )
-        / len(
-            local_codes
-        )
-
-        if local_codes
-
-        else None
-    )
-
-
     return {
-        "gemini_course_count":
+        "qwen_course_count":
             len(
                 courses
             ),
 
-        "gemini_coded_count":
+        "qwen_coded_count":
             len(
-                gemini_codes
+                qwen_codes
             ),
 
         "local_candidate_count":
@@ -1348,13 +1523,30 @@ def validate_gemini_result(
             ),
 
         "local_overlap_ratio":
-            local_overlap_ratio,
+            (
+                len(
+                    overlap
+                )
+                / len(
+                    local_codes
+                )
 
-        "missing_in_gemini":
-            missing_in_gemini,
+                if local_codes
 
-        "gemini_only":
-            gemini_only,
+                else None
+            ),
+
+        "missing_in_qwen":
+            sorted(
+                local_codes
+                - qwen_codes
+            ),
+
+        "qwen_only":
+            sorted(
+                qwen_codes
+                - local_codes
+            ),
 
         "no_code_courses":
             no_code_courses,
@@ -1362,7 +1554,7 @@ def validate_gemini_result(
 
 
 # ============================================================
-# DB 적재 검증 게이트
+# DB 저장 Gate
 # ============================================================
 
 def assert_validation_passed(
@@ -1373,139 +1565,112 @@ def assert_validation_passed(
         str
     ] = []
 
-
-    gemini_course_count = validation[
-        "gemini_course_count"
-    ]
-
-
-    gemini_coded_count = validation[
-        "gemini_coded_count"
-    ]
-
-
-    local_code_count = validation[
-        "local_code_count"
-    ]
-
-
-    overlap_count = validation[
-        "overlap_count"
-    ]
-
-
-    local_overlap_ratio = validation[
-        "local_overlap_ratio"
-    ]
-
-
-    missing_in_gemini = validation[
-        "missing_in_gemini"
-    ]
-
-
-    gemini_only = validation[
-        "gemini_only"
-    ]
-
-
-    no_code_courses = validation[
-        "no_code_courses"
-    ]
-
-
-    # Gemini 결과의 모든 교과목이 코드 보유
     if (
-        gemini_course_count
-        != gemini_coded_count
+        validation[
+            "qwen_course_count"
+        ]
+        != validation[
+            "qwen_coded_count"
+        ]
     ):
 
         errors.append(
             (
-                "Gemini 교과목 수와 "
+                "Qwen 교과목 수와 "
                 "코드 보유 수가 다릅니다: "
-                f"{gemini_course_count} / "
-                f"{gemini_coded_count}"
+                f"{validation['qwen_course_count']} / "
+                f"{validation['qwen_coded_count']}"
             )
         )
 
-
-    # 로컬 코드 수와 Gemini 코드 수 동일
     if (
-        gemini_coded_count
-        != local_code_count
+        validation[
+            "qwen_coded_count"
+        ]
+        != validation[
+            "local_code_count"
+        ]
     ):
 
         errors.append(
             (
-                "Gemini 코드 수와 "
+                "Qwen 코드 수와 "
                 "로컬 코드 수가 다릅니다: "
-                f"{gemini_coded_count} / "
-                f"{local_code_count}"
+                f"{validation['qwen_coded_count']} / "
+                f"{validation['local_code_count']}"
             )
         )
 
-
-    # 코드 집합 100% 일치
     if (
-        overlap_count
-        != local_code_count
+        validation[
+            "overlap_count"
+        ]
+        != validation[
+            "local_code_count"
+        ]
     ):
 
         errors.append(
             (
                 "로컬 코드 전체가 "
-                "Gemini와 일치하지 않습니다: "
-                f"{overlap_count} / "
-                f"{local_code_count}"
+                "Qwen 결과와 일치하지 않습니다: "
+                f"{validation['overlap_count']} / "
+                f"{validation['local_code_count']}"
             )
         )
 
+    ratio = (
+        validation[
+            "local_overlap_ratio"
+        ]
+    )
 
     if (
-        local_overlap_ratio is None
-        or local_overlap_ratio < 1.0
+        ratio is None
+        or ratio < 1.0
     ):
 
         errors.append(
             (
                 "코드 일치율이 "
                 "100%가 아닙니다: "
-                f"{local_overlap_ratio}"
+                f"{ratio}"
             )
         )
 
-
-    if missing_in_gemini:
+    if validation[
+        "missing_in_qwen"
+    ]:
 
         errors.append(
             (
                 "로컬에는 있지만 "
-                "Gemini에는 없는 코드: "
-                f"{missing_in_gemini}"
+                "Qwen에는 없는 코드: "
+                f"{validation['missing_in_qwen']}"
             )
         )
 
-
-    if gemini_only:
+    if validation[
+        "qwen_only"
+    ]:
 
         errors.append(
             (
-                "Gemini에만 있는 코드: "
-                f"{gemini_only}"
+                "Qwen에만 있는 코드: "
+                f"{validation['qwen_only']}"
             )
         )
 
-
-    if no_code_courses:
+    if validation[
+        "no_code_courses"
+    ]:
 
         errors.append(
             (
-                "코드 없는 Gemini 교과목이 "
-                "존재합니다."
+                "코드 없는 Qwen "
+                "교과목이 존재합니다."
             )
         )
-
 
     if errors:
 
@@ -1513,13 +1678,11 @@ def assert_validation_passed(
             "\n[검증 실패]"
         )
 
-
         for error in errors:
 
             print(
                 f"  - {error}"
             )
-
 
         raise RuntimeError(
             (
@@ -1528,40 +1691,34 @@ def assert_validation_passed(
             )
         )
 
-
     print(
         "\n[검증 통과]"
     )
 
-
     print(
         (
-            f"  Gemini 교과목: "
-            f"{gemini_course_count}개"
+            f"  Qwen 교과목: "
+            f"{validation['qwen_course_count']}개"
         )
     )
 
-
     print(
         (
-            f"  로컬 교과목 코드: "
-            f"{local_code_count}개"
+            "  로컬 교과목 코드: "
+            f"{validation['local_code_count']}개"
         )
     )
 
-
     print(
         (
-            f"  코드 일치: "
-            f"{overlap_count}개"
+            "  코드 일치: "
+            f"{validation['overlap_count']}개"
         )
     )
-
 
     print(
         "  일치율: 100.0%"
     )
-
 
     print(
         "  -> PostgreSQL 적재 허용"
@@ -1569,7 +1726,7 @@ def assert_validation_passed(
 
 
 # ============================================================
-# SourceDocument용 텍스트
+# SourceDocument 내용
 # ============================================================
 
 def build_source_content(
@@ -1578,11 +1735,10 @@ def build_source_content(
 
     lines = [
         (
-            "페이지 | 학년 | 학기 | 이수구분 | "
-            "교과목코드 | 교과목명 | 학점 | 이론 | 실습"
+            "건양대학교 인공지능학과 "
+            "교육과정"
         )
     ]
-
 
     for course in courses:
 
@@ -1631,60 +1787,53 @@ def build_source_content(
                         or ""
                     ),
 
-                    (
-                        str(
+                    str(
+                        (
                             course.get(
                                 "credits"
                             )
-                        )
 
-                        if (
-                            course.get(
+                            if course.get(
                                 "credits"
                             )
                             is not None
-                        )
 
-                        else ""
+                            else ""
+                        )
                     ),
 
-                    (
-                        str(
+                    str(
+                        (
                             course.get(
                                 "theory_hours"
                             )
-                        )
 
-                        if (
-                            course.get(
+                            if course.get(
                                 "theory_hours"
                             )
                             is not None
-                        )
 
-                        else ""
+                            else ""
+                        )
                     ),
 
-                    (
-                        str(
+                    str(
+                        (
                             course.get(
                                 "practice_hours"
                             )
-                        )
 
-                        if (
-                            course.get(
+                            if course.get(
                                 "practice_hours"
                             )
                             is not None
-                        )
 
-                        else ""
+                            else ""
+                        )
                     ),
                 ]
             )
         )
-
 
     return "\n".join(
         lines
@@ -1694,6 +1843,7 @@ def build_source_content(
 # ============================================================
 # PostgreSQL 저장
 # ============================================================
+
 def save_to_database(
     *,
     source: CurriculumSource,
@@ -1702,17 +1852,14 @@ def save_to_database(
     validation: dict,
 ) -> dict:
 
-    content = build_source_content(
-        courses
+    content = (
+        build_source_content(
+            courses
+        )
     )
 
     created_count = 0
     updated_count = 0
-
-    # Session이 닫힌 뒤 ORM 객체를 읽지 않도록
-    # ID만 일반 정수로 미리 저장
-    parent_source_document_id = None
-
 
     with Session(
         engine
@@ -1753,15 +1900,21 @@ def save_to_database(
                             "konyang_curriculum",
 
                         "parser":
-                            "gemini_pdf_with_local_audit",
+                            (
+                                "qwen_local_text_"
+                                "with_local_audit"
+                            ),
 
-                        "gemini_model":
-                            GEMINI_MODEL,
+                        "qwen_model":
+                            LLM_MODEL,
 
                         "pdf_sha256":
-                            hashlib.sha256(
-                                pdf_bytes
-                            ).hexdigest(),
+                            (
+                                hashlib.sha256(
+                                    pdf_bytes
+                                )
+                                .hexdigest()
+                            ),
 
                         "course_count":
                             len(
@@ -1769,14 +1922,14 @@ def save_to_database(
                             ),
 
                         "validation": {
-                            "gemini_course_count":
+                            "qwen_course_count":
                                 validation[
-                                    "gemini_course_count"
+                                    "qwen_course_count"
                                 ],
 
-                            "gemini_coded_count":
+                            "qwen_coded_count":
                                 validation[
-                                    "gemini_coded_count"
+                                    "qwen_coded_count"
                                 ],
 
                             "local_code_count":
@@ -1801,21 +1954,14 @@ def save_to_database(
                 )
             )
 
+            session.flush()
 
-            # 중요:
-            # Session이 살아 있을 때 ID를 꺼내둔다.
             parent_source_document_id = (
-                parent_document.source_document_id
+                parent_document
+                .source_document_id
             )
 
-
-            for (
-                index,
-                course,
-            ) in enumerate(
-                courses,
-                start=1,
-            ):
+            for course in courses:
 
                 result = (
                     upsert_course_record(
@@ -1829,72 +1975,51 @@ def save_to_database(
                     )
                 )
 
-
-                if result.get(
+                if result[
                     "created"
-                ):
+                ]:
 
                     created_count += 1
-                    status = "CREATED"
 
                 else:
 
                     updated_count += 1
-                    status = "UPDATED"
-
-
-                print(
-                    (
-                        f"  "
-                        f"[{index:02d}/"
-                        f"{len(courses):02d}] "
-                        f"{status} | "
-                        f"{course.get('course_code')} | "
-                        f"{course.get('name')}"
-                    )
-                )
-
 
             session.commit()
-
 
         except Exception:
 
             session.rollback()
+
             raise
 
-
-    # 여기서는 ORM 객체 parent_document에
-    # 다시 접근하지 않는다.
     return {
-        "total":
-            len(
-                courses
-            ),
-
         "created":
             created_count,
 
         "updated":
             updated_count,
 
-        "parent_source_document_id":
-            parent_source_document_id,
+        "total":
+            len(
+                courses
+            ),
     }
 
+
 # ============================================================
-# 콘솔 미리보기
+# 출력
 # ============================================================
 
 def print_preview(
     courses: list[dict],
+
     limit: int = 40,
 ) -> None:
 
     print(
-        "\n[Gemini 추출 미리보기]"
+        "\n[Qwen 추출 미리보기]"
     )
-
 
     for (
         index,
@@ -1909,20 +2034,39 @@ def print_preview(
         print(
             (
                 f"{index:03d}. "
-                f"p{course.get('source_page')} | "
-                f"{course.get('year_level') or '-'}학년 | "
-                f"{course.get('semester') or '-'}학기 | "
-                f"{course.get('completion_type') or '-'} | "
-                f"{course.get('course_code') or '-'} | "
-                f"{course.get('name')} | "
-                f"{course.get('credits') if course.get('credits') is not None else '-'}학점"
+
+                f"p"
+                f"{course.get('source_page')}"
+
+                f" | "
+                f"{course.get('year_level') or '-'}"
+                f"학년"
+
+                f" | "
+                f"{course.get('semester') or '-'}"
+                f"학기"
+
+                f" | "
+                f"{course.get('completion_type') or '-'}"
+
+                f" | "
+                f"{course.get('course_code') or '-'}"
+
+                f" | "
+                f"{course.get('name')}"
+
+                f" | "
+                f"{course.get('credits') if course.get('credits') is not None else '-'}"
+                f"학점"
             )
         )
 
-
-    if len(
-        courses
-    ) > limit:
+    if (
+        len(
+            courses
+        )
+        > limit
+    ):
 
         print(
             (
@@ -1932,10 +2076,6 @@ def print_preview(
         )
 
 
-# ============================================================
-# 상세 불일치 출력
-# ============================================================
-
 def print_mismatch_details(
     validation: dict,
 ) -> None:
@@ -1944,59 +2084,27 @@ def print_mismatch_details(
         "\n[상세 불일치 검사]"
     )
 
-
     print(
         (
             "  로컬에는 있지만 "
-            "Gemini에는 없는 코드: "
-            f"{validation['missing_in_gemini']}"
+            "Qwen에는 없는 코드: "
+            f"{validation['missing_in_qwen']}"
         )
     )
-
 
     print(
         (
-            "  Gemini에만 있는 코드: "
-            f"{validation['gemini_only']}"
+            "  Qwen에만 있는 코드: "
+            f"{validation['qwen_only']}"
         )
     )
-
 
     print(
-        "\n  코드 없는 Gemini 항목:"
-    )
-
-
-    no_code_courses = (
-        validation[
-            "no_code_courses"
-        ]
-    )
-
-
-    if not no_code_courses:
-
-        print(
-            "    없음"
+        (
+            "  코드 없는 Qwen 항목: "
+            f"{len(validation['no_code_courses'])}개"
         )
-
-        return
-
-
-    for course in (
-        no_code_courses
-    ):
-
-        print(
-            (
-                f"    "
-                f"p{course.get('source_page')} | "
-                f"{course.get('year_level') or '-'}학년 | "
-                f"{course.get('semester') or '-'}학기 | "
-                f"{course.get('completion_type') or '-'} | "
-                f"{course.get('name')}"
-            )
-        )
+    )
 
 
 # ============================================================
@@ -2020,32 +2128,26 @@ def run(
         "=" * 72
     )
 
-
     print(
         (
             "CareerQuest - "
             "건양대학교 교육과정 "
-            "수집/검증/적재"
+            "수집/검증/적재 "
+            "(Qwen)"
         )
     )
-
 
     print(
         "=" * 72
     )
 
-
     # --------------------------------------------------------
-    # 1. PDF 탐색
+    # 1. PDF
     # --------------------------------------------------------
 
     print(
-        (
-            "\n[1/5] "
-            "공식 교육과정 PDF 탐색"
-        )
+        "\n[1/5] 공식 교육과정 PDF 탐색"
     )
-
 
     source = (
         discover_curriculum_pdf(
@@ -2059,14 +2161,12 @@ def run(
         )
     )
 
-
     print(
         (
             f"  학과: "
             f"{source.department_name}"
         )
     )
-
 
     print(
         (
@@ -2075,14 +2175,12 @@ def run(
         )
     )
 
-
     print(
         (
             f"  PDF: "
             f"{source.pdf_url}"
         )
     )
-
 
     # --------------------------------------------------------
     # 2. 다운로드
@@ -2092,13 +2190,11 @@ def run(
         "\n[2/5] PDF 다운로드"
     )
 
-
     pdf_bytes = (
         download_pdf_bytes(
             source
         )
     )
-
 
     print(
         (
@@ -2107,9 +2203,8 @@ def run(
         )
     )
 
-
     # --------------------------------------------------------
-    # 3. 로컬 감사
+    # 3. 로컬 audit
     # --------------------------------------------------------
 
     print(
@@ -2119,13 +2214,11 @@ def run(
         )
     )
 
-
     audit = (
         local_audit(
             pdf_bytes
         )
     )
-
 
     print(
         (
@@ -2134,14 +2227,12 @@ def run(
         )
     )
 
-
     print(
         (
             "  로컬 엄격 후보 행: "
             f"{audit['candidate_count']}개"
         )
     )
-
 
     print(
         (
@@ -2150,15 +2241,12 @@ def run(
         )
     )
 
-
     for (
         page_no,
         count,
-    ) in (
-        audit[
-            "page_counts"
-        ].items()
-    ):
+    ) in audit[
+        "page_counts"
+    ].items():
 
         if count:
 
@@ -2170,22 +2258,20 @@ def run(
                 )
             )
 
-
     # --------------------------------------------------------
-    # 4. Gemini 전체 PDF 구조화
+    # 4. Qwen
     # --------------------------------------------------------
 
     print(
         (
             f"\n[4/5] "
-            f"{GEMINI_MODEL} "
-            "PDF 전체 구조화"
+            f"{LLM_MODEL} "
+            "교육과정 구조화"
         )
     )
 
-
     courses = (
-        extract_with_gemini(
+        extract_with_qwen(
             pdf_bytes,
 
             source,
@@ -2196,40 +2282,34 @@ def run(
         )
     )
 
-
     validation = (
-        validate_gemini_result(
+        validate_qwen_result(
             courses,
             audit,
         )
     )
 
-
     print_mismatch_details(
         validation
     )
-
 
     print(
         "\n[검증 요약]"
     )
 
-
     print(
         (
-            "  Gemini 교과목: "
-            f"{validation['gemini_course_count']}개"
+            f"  Qwen 교과목: "
+            f"{validation['qwen_course_count']}개"
         )
     )
 
-
     print(
         (
-            "  Gemini 코드 보유: "
-            f"{validation['gemini_coded_count']}개"
+            "  Qwen 코드 보유: "
+            f"{validation['qwen_coded_count']}개"
         )
     )
-
 
     print(
         (
@@ -2238,14 +2318,12 @@ def run(
         )
     )
 
-
     print(
         (
             "  코드 일치: "
             f"{validation['overlap_count']}개"
         )
     )
-
 
     if (
         validation[
@@ -2257,29 +2335,35 @@ def run(
         print(
             (
                 "  로컬 코드 중 "
-                "Gemini와 일치: "
+                "Qwen과 일치: "
                 f"{validation['local_overlap_ratio']:.1%}"
             )
         )
-
-
-    # --------------------------------------------------------
-    # DB 저장 허용 여부 최종 판정
-    # --------------------------------------------------------
 
     assert_validation_passed(
         validation
     )
 
-
     print_preview(
         courses
     )
 
+    # --------------------------------------------------------
+    # 5. DB
+    # --------------------------------------------------------
 
-    # --------------------------------------------------------
-    # 5. DB 저장
-    # --------------------------------------------------------
+    save_result = {
+        "created":
+            0,
+
+        "updated":
+            0,
+
+        "total":
+            len(
+                courses
+            ),
+    }
 
     if save_db:
 
@@ -2287,8 +2371,7 @@ def run(
             "\n[5/5] PostgreSQL 적재"
         )
 
-
-        db_result = (
+        save_result = (
             save_to_database(
                 source=(
                     source
@@ -2308,100 +2391,117 @@ def run(
             )
         )
 
-
-        print(
-            "\n[DB 적재 완료]"
-        )
-
-
         print(
             (
-                f"  총: "
-                f"{db_result['total']}개"
+                f"  생성 "
+                f"{save_result['created']}개 "
+                f"/ 갱신 "
+                f"{save_result['updated']}개 "
+                f"/ 전체 "
+                f"{save_result['total']}개"
             )
         )
-
-
-        print(
-            (
-                f"  신규: "
-                f"{db_result['created']}개"
-            )
-        )
-
-
-        print(
-            (
-                f"  갱신: "
-                f"{db_result['updated']}개"
-            )
-        )
-
-
-        print(
-            (
-                "  Parent SourceDocument ID: "
-                f"{db_result['parent_source_document_id']}"
-            )
-        )
-
 
     else:
 
         print(
-            "\n[5/5] PostgreSQL 적재 생략"
+            (
+                "\n[5/5] "
+                "Dry run - DB 저장 생략"
+            )
         )
 
-
-        db_result = None
-
-
-    print(
-        "\n"
-        + "=" * 72
-    )
-
-
-    print(
-        "교육과정 수집 작업 완료"
-    )
-
-
-    print(
-        "=" * 72
-    )
-
-
     return {
-        "source":
-            source,
+        "source": {
+            "page_url":
+                source.page_url,
 
-        "audit":
-            audit,
+            "pdf_url":
+                source.pdf_url,
 
-        "courses":
-            courses,
+            "file_name":
+                source.file_name,
+        },
+
+        "model":
+            LLM_MODEL,
+
+        "audit": {
+            **audit,
+
+            "course_codes":
+                sorted(
+                    audit[
+                        "course_codes"
+                    ]
+                ),
+        },
 
         "validation":
             validation,
 
-        "db":
-            db_result,
+        "save":
+            save_result,
     }
 
 
 # ============================================================
-# main
+# CLI
 # ============================================================
 
-if __name__ == "__main__":
+def parse_args() -> argparse.Namespace:
+
+    parser = (
+        argparse.ArgumentParser()
+    )
+
+    parser.add_argument(
+        "--year",
+
+        type=int,
+
+        default=(
+            DEFAULT_CURRICULUM_YEAR
+        ),
+    )
+
+    parser.add_argument(
+        "--department",
+
+        default=(
+            DEFAULT_DEPARTMENT
+        ),
+    )
+
+    parser.add_argument(
+        "--dry-run",
+
+        action="store_true",
+    )
+
+    return parser.parse_args()
+
+
+def main() -> None:
+
+    args = (
+        parse_args()
+    )
 
     run(
-        curriculum_year=2026,
+        curriculum_year=(
+            args.year
+        ),
 
-        department_name="인공지능학과",
+        department_name=(
+            args.department
+        ),
 
-        # 66 / 66, 코드 일치 100% 검증 완료.
-        # 이후에도 검증 게이트를 통과해야만 DB에 저장됨.
-        save_db=True,
+        save_db=(
+            not args.dry_run
+        ),
     )
+
+
+if __name__ == "__main__":
+    main()
