@@ -58,6 +58,7 @@ class UploadResult(BaseModel):
     chars: int = 0
     pages: int | None = None
     ocr_pages: list[int] = []
+    ocr_images: int = Field(default=0, description="문서 속 그림(붙여 넣은 스캔·캡처)을 OCR한 수")
     warnings: list[str] = []
     text: str = ""
     error: str | None = None
@@ -87,7 +88,7 @@ def upload(files: list[UploadFile] = File(...)):
             continue
         results.append(UploadResult(
             filename=name, ok=True, file_type=doc.file_type, method=doc.method, chars=len(doc.text),
-            pages=len(doc.pages) if doc.pages is not None else None, ocr_pages=doc.ocr_pages,
+            pages=len(doc.pages) if doc.pages is not None else None, ocr_pages=doc.ocr_pages, ocr_images=doc.ocr_images,
             warnings=doc.warnings, text=doc.text))
     return results
 

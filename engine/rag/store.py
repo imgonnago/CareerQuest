@@ -2,10 +2,16 @@
 
 테이블은 인호 쪽 alembic 스키마(alembic/versions/5e6b07cc8ac9_*.py)를 그대로 쓴다.
 - source_document: 문서 1건 = 1행. content에 본문 전체. 출처·메타데이터는 raw_metadata(JSONB)
-- document_chunk : 조각 본문 + embedding(vector(1024), bge-m3) + metadata(JSONB, 문서 메타 + page)
+- document_chunk : 조각 본문 + embedding(vector(1024), bge-m3) + metadata(JSONB, 검색 필터용 메타 + page + content_hash)
 
 검색은 조각 단위로 코사인 거리(<=>) → 문서별로 묶어 돌려준다. 찾은 문서의 본문 전체는
 get_document()로 읽어 LLM에게 준다 (조각만 주지 않는다).
+
+문서가 들어오는 길은 둘이다.
+- ingest(): 파일(교육과정 PDF 등)을 직접 적재. source_document와 조각을 함께 만든다
+- engine/rag/index.py: 인호 로더(src/loaders)가 넣은 source_document에 조각·임베딩만 붙인다
+검색 필터(doc_kind·school·department)는 조각 metadata를 본다 — 인호 로더는 다시 적재할 때 raw_metadata를
+통째로 덮어쓰므로 거기에 doc_kind를 넣으면 사라진다. 조각 metadata의 content_hash가 문서와 다르면 index.py가 다시 만든다.
 
 같은 (source_name, source_record_key)로 다시 넣으면 덮어쓴다. 본문 해시가 같으면 임베딩을 다시 하지 않는다.
 """
@@ -109,18 +115,23 @@ def ingest(doc: ExtractedDoc, *, source_name: str, record_key: str, title: str,
             RETURNING source_document_id"""), params).scalar_one()
 
         chunks = chunk_document(doc)
-        vecs = _embed_chunks(title, chunks)
-        conn.execute(text("DELETE FROM document_chunk WHERE source_document_id = :id"), {"id": doc_id})
-        if chunks:
-            conn.execute(text("""
-                INSERT INTO document_chunk
-                    (source_document_id, chunk_index, content, embedding, embedding_model, embedding_dim, metadata)
-                VALUES (:id, :idx, :content, CAST(:emb AS vector), :model, :dim, CAST(:meta AS jsonb))"""),
-                [{"id": doc_id, "idx": c.index, "content": c.content, "emb": _vec(v), "model": EMBED_MODEL,
-                  "dim": EMBED_DIM, "meta": json.dumps({**meta, "page": c.page}, ensure_ascii=False)}
-                 for c, v in zip(chunks, vecs)])
+        write_chunks(conn, doc_id, title, chunks, {**meta, "content_hash": doc.sha256})
     log.info("저장: %s (문서 %d, 조각 %d)", title, doc_id, len(chunks))
     return doc_id, len(chunks)
+
+
+def write_chunks(conn, source_document_id: int, title: str, chunks: list[Chunk], meta: dict) -> None:
+    """문서의 조각을 모두 지우고 새로 임베딩해 넣는다. meta는 조각마다 붙일 검색 필터용 메타 (page는 조각별로 덧붙임)."""
+    vecs = _embed_chunks(title, chunks)
+    conn.execute(text("DELETE FROM document_chunk WHERE source_document_id = :id"), {"id": source_document_id})
+    if chunks:
+        conn.execute(text("""
+            INSERT INTO document_chunk
+                (source_document_id, chunk_index, content, embedding, embedding_model, embedding_dim, metadata)
+            VALUES (:id, :idx, :content, CAST(:emb AS vector), :model, :dim, CAST(:meta AS jsonb))"""),
+            [{"id": source_document_id, "idx": c.index, "content": c.content, "emb": _vec(v), "model": EMBED_MODEL,
+              "dim": EMBED_DIM, "meta": json.dumps({**meta, "page": c.page}, ensure_ascii=False)}
+             for c, v in zip(chunks, vecs)])
 
 
 @dataclass
@@ -141,27 +152,33 @@ class DocHit:
     metadata: dict
     score: float                       # 가장 비슷한 조각의 점수
     chunks: list[ChunkHit] = field(default_factory=list)
+    doc_kind: str | None = None        # 조각 metadata의 doc_kind (교육과정·비교과·채용공고 …)
 
 
 def search(query: str, k: int = 5, filters: dict | None = None, min_score: float = 0.0,
-           chunks_per_doc: int = 3, chunk_pool: int = 40) -> list[DocHit]:
+           chunks_per_doc: int = 3, chunk_pool: int = 40, doc_kinds: list[str] | None = None) -> list[DocHit]:
     """질문과 비슷한 문서 k건 (점수 높은 순). 문서마다 맞은 조각을 점수 순으로 chunks_per_doc개까지 붙인다.
 
-    filters  : raw_metadata에 포함돼야 하는 값. 예) {"school": "건양대학교", "doc_kind": "교육과정"}
+    filters  : 조각 metadata에 포함돼야 하는 값. 예) {"school": "건양대학교", "doc_kind": "교육과정"}
     min_score: 이보다 낮은 조각은 버린다. 문서가 적으면 무관한 문서도 k건 안에 들어오기 때문
                (시험: 관련 0.59~0.68, 무관 0.42~0.47, bge-m3 기준)
     chunk_pool: 먼저 뽑을 조각 수. 한 문서의 조각이 위를 다 차지해도 k개 문서가 나오도록 넉넉히 뽑는다.
+    doc_kinds: 조각 metadata의 doc_kind가 이 중 하나인 문서만 (2단계 슬롯별 검색. 예: ["교육과정", "수업계획서"])
     """
     qv = _vec(embed([query])[0])
     where = "d.evidence_eligible"
     params: dict = {"q": qv, "n": max(chunk_pool, k * 4)}
     if filters:
-        where += " AND d.raw_metadata @> CAST(:f AS jsonb)"
+        where += " AND c.metadata @> CAST(:f AS jsonb)"
         params["f"] = json.dumps(filters, ensure_ascii=False)
+    if doc_kinds:
+        where += " AND c.metadata->>'doc_kind' = ANY(:kinds)"
+        params["kinds"] = list(doc_kinds)
     with _engine().connect() as conn:
         rows = conn.execute(text(f"""
             SELECT d.source_document_id, d.title, d.source_name, d.document_type, d.source_url, d.raw_metadata,
-                   c.chunk_index, c.metadata->>'page', c.content, 1 - (c.embedding <=> CAST(:q AS vector))
+                   c.chunk_index, c.metadata->>'page', c.content, 1 - (c.embedding <=> CAST(:q AS vector)),
+                   c.metadata->>'doc_kind'
             FROM document_chunk c JOIN source_document d USING (source_document_id)
             WHERE {where} AND c.embedding IS NOT NULL
             ORDER BY c.embedding <=> CAST(:q AS vector)
@@ -174,7 +191,7 @@ def search(query: str, k: int = 5, filters: dict | None = None, min_score: float
         if hit is None:
             if len(docs) >= k:
                 continue
-            hit = docs[r[0]] = DocHit(r[0], r[1] or "", r[2], r[3], r[4], r[5] or {}, float(r[9]))
+            hit = docs[r[0]] = DocHit(r[0], r[1] or "", r[2], r[3], r[4], r[5] or {}, float(r[9]), doc_kind=r[10])
         if len(hit.chunks) < chunks_per_doc:
             hit.chunks.append(ChunkHit(r[6], int(r[7]) if r[7] else None, r[8], float(r[9])))
     return list(docs.values())

@@ -83,7 +83,8 @@ def render_role_docs(docs: list[EvidenceDoc], cards: list[NumberedCard]) -> str:
         if doc.doc_id not in items:
             continue
         source = f" · {doc.source_name}" if doc.source_name else ""
-        blocks.append(f"[{nums[doc.doc_id]}] {doc.title}\n출처: {doc.domain}{source}\n요약: {doc.snippet}\n"
+        domain = "DB 자료" if doc.provider == "rag" else doc.domain  # [48] RAG 문서는 도메인이 없음 (2단계 표시와 같게)
+        blocks.append(f"[{nums[doc.doc_id]}] {doc.title}\n출처: {domain}{source}\n요약: {doc.snippet}\n"
                       f"근거 항목: {'; '.join(items[doc.doc_id])}")
     return "\n\n".join(blocks)
 
@@ -355,7 +356,7 @@ def render_table(result: AggregationResult) -> str:
         role = ", ".join(f"{k} {v}" for k, v in r.by_role.items())
         company = f" | 기업: {', '.join(r.companies)}" if r.companies else ""
         docs = ",".join(nums[d] for d in r.doc_ids)
-        sid = f"#{r.skill_id}" if r.skill_id is not None else "사전 없음"
+        sid = f"#{r.skill_id}" if r.skill_id is not None else r.mapping  # [49] 사전에 없으면 "매핑되지 않음"
         lines.append(f"{r.skill} ({sid}) | 문서 {r.doc_count}(본문 {r.fulltext_docs}) | 분류: {cat} | 역할: {role}"
                      f"{company} | 근거: {','.join(r.card_ids)} ({docs})")
     return "\n".join(lines)

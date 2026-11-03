@@ -23,6 +23,10 @@ from src.student_skill_service import (
 GapType = Literal[
     "미보유",
     "수준부족",
+    # Skill 사전에 매핑되지 않은 근거 Skill.
+    # 지우지 않고 그대로 돌려줘 화면·추천에서
+    # "매핑되지 않음"으로 보여준다 (2026-11-03 합의)
+    "매핑되지 않음",
 ]
 
 
@@ -43,15 +47,24 @@ class SkillRowForGap(
 
     doc_count, card_count, by_role 등
     나머지 필드는 그대로 넘어와도 무시합니다.
+
+    skill_id가 null이면 Skill 사전에 매핑되지
+    않은 줄이다. 거절하지 않고
+    gap="매핑되지 않음"으로 돌려준다.
     """
 
     model_config = ConfigDict(
         extra="ignore"
     )
 
-    skill_id: int = Field(
-        gt=0
+    skill_id: int | None = Field(
+        default=None,
+        gt=0,
     )
+
+    # 모델팀 SkillRow.skill (Skill 이름).
+    # 매핑되지 않은 줄은 이 이름으로만 구분된다
+    skill: str | None = None
 
     # 수준 비교가 필요한 Skill에만 사용
     required_level: str | None = None
@@ -120,6 +133,11 @@ class GapRequest(
         )
 
         for row in value:
+
+            # 매핑되지 않은 줄(skill_id null)은
+            # 중복 검사 대상이 아니다
+            if row.skill_id is None:
+                continue
 
             if (
                 row.skill_id
@@ -216,8 +234,12 @@ class GapRequest(
         self,
     ) -> "GapRequest":
 
+        # 매핑되지 않은 줄은 수준 비교를 하지 않는다
         needs_level_compare = any(
             row.required_level
+            is not None
+
+            and row.skill_id
             is not None
 
             for row in self.skills
@@ -242,7 +264,10 @@ class GapResultItem(
     BaseModel
 ):
 
-    skill_id: int
+    skill_id: int | None
+
+    # 매핑되지 않은 줄을 구분하는 이름
+    skill: str | None = None
 
     student_level: str | None
 
@@ -431,6 +456,10 @@ def calculate_skill_gaps(
     이 함수는 추천을 수행하지 않습니다.
 
     GAP이 있는 Skill만 반환합니다.
+
+    skill_id가 없는(Skill 사전에 매핑되지 않은)
+    줄은 지우지 않고 gap="매핑되지 않음"으로
+    함께 반환합니다.
     """
 
     request = (
@@ -472,6 +501,8 @@ def calculate_skill_gaps(
         row.skill_id
 
         for row in request.skills
+
+        if row.skill_id is not None
     ]
 
     validate_skill_ids(
@@ -504,6 +535,27 @@ def calculate_skill_gaps(
 
     for row in request.skills:
 
+        # ----------------------------------------------------
+        # Skill 사전에 매핑되지 않은 근거 Skill
+        # 보유 여부를 판단할 수 없으므로 그대로 명시
+        # ----------------------------------------------------
+
+        if row.skill_id is None:
+
+            result.append(
+                GapResultItem(
+                    skill_id=None,
+
+                    skill=row.skill,
+
+                    student_level=None,
+
+                    gap="매핑되지 않음",
+                )
+            )
+
+            continue
+
         student_skill = (
             student_skills.get(
                 row.skill_id
@@ -521,6 +573,8 @@ def calculate_skill_gaps(
                     skill_id=(
                         row.skill_id
                     ),
+
+                    skill=row.skill,
 
                     student_level=None,
 
@@ -620,6 +674,8 @@ def calculate_skill_gaps(
                     skill_id=(
                         row.skill_id
                     ),
+
+                    skill=row.skill,
 
                     student_level=(
                         str(

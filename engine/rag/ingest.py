@@ -43,6 +43,7 @@ def ingest_file(entry: dict, dry_run: bool = False, force: bool = False) -> None
     chunks = chunk_document(doc)
     took = time.time() - t0
     ocr = f", OCR {len(doc.ocr_pages)}쪽" if doc.ocr_pages else ""
+    ocr += f", 그림 OCR {doc.ocr_images}개" if doc.ocr_images else ""
     print(f"[추출] {path.name}: {doc.method}{ocr}, {len(doc.text):,}자, 조각 {len(chunks)}개, {took:.1f}초")
     for w in doc.warnings:
         print(f"  ! {w}")
@@ -81,7 +82,9 @@ def main(argv=None) -> int:
     p.add_argument("paths", nargs="*", help="파일 또는 폴더 (폴더는 지원 형식 파일 전체)")
     p.add_argument("--manifest", help="파일별 메타데이터 목록(JSON 배열)")
     p.add_argument("--title")
-    p.add_argument("--doc-kind", help="문서 종류. 예: 교육과정, 수업계획서, 비교과, 로드맵, 지역프로그램")
+    p.add_argument("--doc-kind", help="문서 종류. 2단계는 이 값으로 슬롯마다 찾는다(stage2_evidence.SLOT_DOC_KINDS): "
+                                      "교육과정·수업계획서·로드맵(교과목), 비교과·교내프로그램(교내 프로그램), "
+                                      "채용공고, 자격증, 공모전·대외활동·지역프로그램, 프로젝트")
     p.add_argument("--department")
     p.add_argument("--year", type=int, help="교육과정 학년도")
     p.add_argument("--source-url")

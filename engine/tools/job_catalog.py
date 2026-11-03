@@ -1,8 +1,8 @@
 """표준 직무 목록 조회 (1단계 직무 설정 LLM이 직무명을 통일할 때 쓰는 목록).
 
-DB(PostgreSQL, src/db/database.py)의 직무 테이블에서 읽는다.
-테이블 형식은 아직 합의 전(README: 인호 → 용재 "표준 직무 목록 형식, DB 스키마, 조회 함수")이라
-가정한 테이블·칸 이름을 JOB_QUERY 한 곳에만 둔다. 형식이 정해지면 여기만 고친다.
+DB(PostgreSQL, src/db/database.py)의 job_role 테이블(인호 스키마, alembic 초기 마이그레이션)에서 읽는다.
+- job_role: job_role_id, name, normalized_name, category, description, standard_code, is_active
+테이블·칸 이름은 JOB_QUERY 한 곳에만 둔다.
 
 DB가 꺼져 있거나 테이블이 없으면 None을 돌려준다 — 1단계는 목록 없이("표준 직무 목록: 없음") 그대로 진행.
 """
@@ -10,8 +10,8 @@ import logging
 
 log = logging.getLogger(__name__)
 
-# 가정: job 테이블의 job_name 칸 (README DB 구조에는 아직 직무 테이블이 없음)
-JOB_QUERY = "SELECT job_name FROM job ORDER BY job_name"
+# 활성 직무의 이름만 (별칭 테이블은 없음)
+JOB_QUERY = "SELECT name FROM job_role WHERE is_active ORDER BY name"
 
 
 def load_job_catalog() -> list[str] | None:

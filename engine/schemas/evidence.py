@@ -3,6 +3,7 @@
 검색 API 결과 1건 = EvidenceDoc 1개. 본문은 담지 않는다.
 - 네이버: 요약(snippet)만 사용 → 본문 수집 안 함
 - 카카오: 본문 수집에 성공하면 fulltext 근거가 됨
+- rag: 벡터 DB(source_document)의 문서. 본문 전체를 DB에서 읽으므로 처음부터 fetch_status="ok" (engine/tools/rag_search.py)
 
 본문은 LLM이 전체를 읽고, 근거가 되는 내용은 상세 근거 카드에 담는다.
 상세 근거 카드는 doc_id로 이 항목을 참조한다.
@@ -11,8 +12,8 @@ from datetime import datetime
 from typing import Literal
 from pydantic import BaseModel, Field, computed_field
 
-Provider = Literal["naver", "kakao"]
-Kind = Literal["blog", "cafe", "web"]
+Provider = Literal["naver", "kakao", "rag"]
+Kind = Literal["blog", "cafe", "web", "document"]  # document = RAG 문서
 FetchStatus = Literal[
     "skipped",      # 본문 수집 대상 아님 (네이버)
     "pending",      # 아직 수집 안 함
@@ -36,7 +37,8 @@ class EvidenceDoc(BaseModel):
     snippet: str = Field(description="검색 API가 준 요약 (잘린 발췌)")
     url: str
     domain: str
-    source_name: str | None = Field(default=None, description="블로그·카페 이름")
+    source_name: str | None = Field(default=None, description="블로그·카페 이름. RAG 문서는 적재한 출처(예: 건양대학교)")
+    doc_kind: str | None = Field(default=None, description="RAG 문서만: 문서 종류(교육과정·비교과·채용공고 …, 조각 metadata doc_kind)")
     published_at: int | None = Field(default=None, description="작성일 YYYYMMDD. 없으면 None")
 
     fetch_status: FetchStatus

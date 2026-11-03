@@ -16,6 +16,10 @@ numpy>=1.26
 # OCR (engine/rag/ocr.py). paddlepaddle 3.3.x는 CPU(oneDNN)에서 NotImplementedError → 3.2.2 고정
 paddlepaddle==3.2.2
 paddleocr>=3.3,<4.0
+# 표 괘선 찾기 (engine/rag/table.py). paddleocr가 같이 설치하는 contrib 판을 그대로 씀 (opencv-python과 같이 깔면 충돌)
+opencv-contrib-python>=4.10
+# 아이폰 사진(HEIC/HEIF) 업로드
+pillow-heif>=0.18
 # 백엔드 API (backend/app.py)
 fastapi>=0.115,<1.0
 uvicorn[standard]>=0.34,<1.0

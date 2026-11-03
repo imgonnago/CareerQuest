@@ -10,6 +10,7 @@ from pydantic import BaseModel, Field, StringConstraints
 
 # [33] 가이드 슬롯(교과목·교내 프로그램·공모전·포트폴리오)을 채우려고 교과목·교내프로그램·대외활동·프로젝트 추가 (2026-10-31)
 Category = Literal["자격요건", "우대사항", "기술스택", "자격증", "교과목", "교내프로그램", "대외활동", "프로젝트", "기업정보", "기타"]
+CourseType = Literal["교양", "전공"]  # [54] 교과목 카드: 교양을 먼저 추천 (전공은 어차피 듣는 과목이 많음)
 
 
 class CardDraft(BaseModel):
@@ -21,6 +22,9 @@ class CardDraft(BaseModel):
     item: str = Field(description="quote가 요구하는 자격증·기술·조건 또는 과목·프로그램·공모전·프로젝트의 짧은 이름. 공고 직무명·기업명 금지. 예: 정보처리기사, Spring Boot, TOEIC Speaking 120, 로봇공학개론")
     category: Category
     company: str | None = Field(default=None, description="문서에 나온 기업명. 없으면 null")
+    # [54] 교과목의 개설 학년·교양/전공은 LLM에 받지 않고 코드가 원문 표에서 읽는다 (stage2_evidence.course_info).
+    # LLM 칸으로 받아 보니 기본값을 두면 안 쓰고(15과목 모두 null), 필수로 하면 학점 칸을 학년으로 읽고(4학년 → 3)
+    # 카드마다 출력이 늘어 읽기 출력 상한에 걸림
 
 
 class CardDraftList(BaseModel):
@@ -34,6 +38,8 @@ class EvidenceCard(BaseModel):
     item: str
     quote: str
     evidence_level: Literal["snippet", "fulltext"] = Field(description="인용이 본문에서 왔는지 요약에서 왔는지")
+    grade: int | None = Field(default=None, description="[54] 교과목: 개설 학년 (코드가 원문 표 머리글·\"N학년\"에서 읽음, 못 읽으면 null)")
+    course_type: CourseType | None = Field(default=None, description="[54] 교과목: 교양/전공 (코드가 원문 표 제목에서 읽음, 못 읽으면 null)")
 
 
 class DocSelection(BaseModel):

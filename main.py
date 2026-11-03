@@ -968,6 +968,13 @@ def gap_contract() -> dict:
                     "required_level":
                         "IM",
                 },
+                {
+                    "skill_id":
+                        None,
+
+                    "skill":
+                        "Vector DB",
+                },
             ],
 
             "level_order": [
@@ -998,6 +1005,19 @@ def gap_contract() -> dict:
                 "gap":
                     "수준부족",
             },
+            {
+                "skill_id":
+                    None,
+
+                "skill":
+                    "Vector DB",
+
+                "student_level":
+                    None,
+
+                "gap":
+                    "매핑되지 않음",
+            },
         ],
 
         "notes": [
@@ -1013,6 +1033,12 @@ def gap_contract() -> dict:
             (
                 "백엔드는 skill_id "
                 "유효성만 검증합니다."
+            ),
+            (
+                "skill_id가 null인 줄(Skill 사전에 "
+                "매핑되지 않은 근거 Skill)은 지우지 않고 "
+                "gap=\"매핑되지 않음\"으로 "
+                "skill 이름과 함께 반환합니다."
             ),
             (
                 "required_level이 없으면 "

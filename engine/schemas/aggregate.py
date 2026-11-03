@@ -11,7 +11,7 @@
 """
 from typing import Annotated, Literal
 
-from pydantic import BaseModel, Field, StringConstraints
+from pydantic import BaseModel, Field, computed_field, StringConstraints
 
 from engine.schemas.card import Category, EvidenceCard
 from engine.schemas.evidence import EvidenceDoc
@@ -100,6 +100,11 @@ class SkillRow(BaseModel):
     names: list[str] = Field(description="사전 매칭 전 Skill 이름 (이름 뽑기·합치기 LLM 결과)")
     card_ids: list[str]
     doc_ids: list[str]
+
+    @computed_field(description="[49] 사전 매칭 결과. 사전에 없는 Skill도 줄을 지우지 않고 '매핑되지 않음'으로 명시 (인호와 합의 2026-11-03)")
+    @property
+    def mapping(self) -> Literal["매핑됨", "매핑되지 않음"]:
+        return "매핑됨" if self.skill_id is not None else "매핑되지 않음"
 
 
 class AggregationResult(BaseModel):

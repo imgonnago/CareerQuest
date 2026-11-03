@@ -444,7 +444,7 @@ CareerQuest 문제점 · 수정할 부분 목록
           "파이썬", "수학·통계"가 교과목으로 통과. 본문 어딘가에 건양대가 언급돼 있으면 다른 대학 내용도 건양대 교과목으로 셈.
   - 메모: 제목·도메인(konyang.ac.kr)·출처에 건양이 있을 때만 통과시키거나, 인용(quote) 주변에 건양이 있는지 확인. RAG가 붙으면 교과목은 RAG 우선.
 
-[40] 1단계 표준 직무 목록을 DB에서 읽게 연결 — 직무 테이블 형식 합의 필요
+[40] 1단계 표준 직무 목록을 DB에서 읽게 연결 — 직무 테이블 형식 합의 필요 (해결)
   - 발견: 2026-11-02, 사용자 요청 ("1단계에서 LLM이 DB에서 직무 목록 찾아서 이름 통일·일반화")
   - 위치: engine/tools/job_catalog.py (load_job_catalog, JOB_QUERY), engine/pipeline/stage1_job.py (set_target_job)
   - 내용: set_target_job(catalog=None)이면 load_job_catalog()가 DB(src/db/database.py)에서 직무 이름을 읽어 직무 설정 LLM에 준다.
@@ -453,6 +453,12 @@ CareerQuest 문제점 · 수정할 부분 목록
   - 메모: 인호와 합의할 것 — 직무 테이블 이름·칸(직무명, 별칭, NCS 코드), 직무와 SKILL의 관계 테이블.
           별칭이 있으면 LLM에 "표준명 (별칭: …)"으로 주면 통일이 더 잘 될 것. 목록이 수백 개로 늘면 bge-m3 임베딩(pgvector)으로
           학생 희망 직무와 가까운 후보만 골라 주는 방식 검토. .env에 POSTGRES_* 값이 없고 이 WSL에는 docker가 없어 실제 DB 조회는 미확인.
+  - 해결: 2026-11-03 · 인호 스키마의 job_role 테이블에서 활성 직무 이름을 읽도록 JOB_QUERY를 바꿈
+  - 방법: engine/tools/job_catalog.py JOB_QUERY를 가정값 "SELECT job_name FROM job"에서
+          "SELECT name FROM job_role WHERE is_active ORDER BY name"으로 교체(alembic 초기 마이그레이션 job_role: name·normalized_name·
+          category·standard_code·is_active). 직무 별칭 테이블은 없어 이름만 준다.
+  - 확인: compileall 통과. 로컬 DB가 꺼져 있어(접속 거부) load_job_catalog()는 경고 로그 뒤 None — 실제 목록 조회는 DB 띄운 뒤 확인할 것.
+  - 남은 한계: job_role에 몇 개가 들어오는지 모름. 수백 개면 위 메모처럼 임베딩으로 후보를 줄여 줘야 함. 별칭이 생기면 "표준명 (별칭: …)" 형식 검토.
 
 [41] 근거 집계 표의 Skill을 DB Skill 사전의 skill_id로 바꿈 (해결)
   - 발견: 2026-11-02, 사용자 요청 (인호와 합의: 집계 표 JSON을 인호 코드로 넘겨 skill_id로 학생 보유/미보유 판단)
@@ -561,13 +567,31 @@ CareerQuest 문제점 · 수정할 부분 목록
           근본적으로는 원본(웹페이지 HTML·텍스트 PDF)을 구하는 게 낫다 — 이 PDF는 웹페이지를 Chrome으로 인쇄한 것(creator: Chrome)이라
           학교 사이트 원문을 크롤링하면 OCR이 필요 없음.
 
-[47] OCR 표: 빈 칸 위치와 ●/○ 기호가 사라져 열 의미가 흐려짐
+[47] OCR 표: 빈 칸 위치와 ●/○ 기호가 사라져 열 의미가 흐려짐 (해결)
   - 발견: 2026-11-03, [45] 교육과정 PDF 7~10쪽
   - 위치: engine/rag/ocr.py (_to_lines)
   - 내용: 교과목 일람표에서 빈 칸(예: 실습 시수 없음)은 건너뛰어 "2 | 2 | 1 | 1"이 이론·실습·학년·학기 중 어느 칸인지 줄만 보고는 모름.
           교과목별 역량 매트릭스(●/○)는 기호가 "O", "•"로 남지만 어느 역량 열인지 알 수 없음.
   - 영향: 검색(교과목 찾기)에는 지장이 적지만, LLM이 "몇 학년 몇 학기"를 읽을 때 틀릴 수 있음.
   - 방향: 교과목 표는 RAG 조각보다 인호 쪽 course_detail(학년·학기·학점 칸)에 구조화해 넣는 게 맞음. 표 구조 인식(PP-StructureV3)은 무겁고 느려 보류.
+  - 해결: 2026-11-03 · 이미지의 괘선으로 표 칸을 찾아 OCR 상자를 칸에 넣고, 빈 칸 자리와 ●/○(픽셀 판단)를 살림. VLM은 비교 후 안 씀
+  - 방법: (비교) 의료인공지능학과 교육과정 PDF(21쪽 스캔본, 원본 그림 1190×1682) 8쪽 교과목 일람표·9쪽 역량 매트릭스로 세 방식을 원본과 대조.
+            PaddleOCR 단독: 쪽당 2~3초, 글자는 대부분 맞지만 빈 칸이 사라지고 ●/○는 거의 검출 안 됨.
+            qwen3.5:9b vision 단독: 쪽당 20~28초, 빈 칸은 살지만 "캡스톤"→"챗스톤", "심화"→"실화", "생체신호의처리"→"생체신호처리"처럼 그럴듯하게 틀림.
+            VLM + OCR 텍스트(이미지 보고 OCR 교정): 쪽당 15초, 일람표는 25행 중 1행 칸 밀림, 매트릭스는 13행 중 6행 기호 위치가 밀림.
+            VLM 오류는 겉보기에 멀쩡해 코드로 검증할 수 없고 2단계 verify(quote 원문 대조)의 원문 자체가 틀어지므로 쓰지 않기로 함.
+          (구현) engine/rag/table.py 새로 만듦, engine/rag/ocr.py는 _layout에서 표 영역 상자는 table.py로, 나머지는 기존 줄 묶기로 보내 위에서부터 합침.
+            괘선: 밝기 200 미만(회색 머리글 배경 약 204는 빠짐)을 가로·세로 긴 막대로 열기, 두꺼운 면(쪽 옆 회색 탭·머리띠·로고)은 빼서 표에 안 붙게.
+            칸: 표 안 괘선에 둘러싸인 흰 영역(병합 칸도 하나). 행: 칸 위·아래 경계로 띠를 나눠 걸친 칸을 왼쪽부터 " | ".
+            세로 병합 칸(이수시기 "1-1", 이수구분 "의사소통")은 20자 이하면 행마다 되풀이, 긴 비고는 첫 행만.
+            한 OCR 상자가 여러 칸에 걸치면 낱말 수 = 칸 수일 때 낱말로, 아니면 글자 위치로 나눔("창의융합실무" → 창의|융합|실무).
+            빈 칸은 잉크 외곽이 정사각형에 가까우면 기호로: 채움 0.6 이상 ●, 가운데가 비면 ○ (저해상도에서 고리가 끊겨도 잉크 전체로 판단).
+            표 안에 표가 있으면(현행/개정 비교표) 칸이 겹쳐 행으로 못 펴므로 예전 줄 묶기.
+  - 확인: 8쪽 일람표 25행 + 현장실습 8행, 6쪽 교양필수 일람표(병합 칸·두 줄 비고), 9·10쪽 매트릭스 27행이 원본 이미지와 칸·기호까지 모두 일치.
+          같은 매트릭스를 텍스트 PDF 속 JPEG 그림으로 넣어(해상도 낮음) 돌려도 기호 결과 같음. 21쪽 전체 54.7초(이전과 같은 수준),
+          중첩 표 처리 전 3쪽이 4,782자로 부풀던 것은 752자로 정상.
+  - 남은 한계: 괘선 없는 표·기울어진 사진 속 표는 예전처럼 줄 묶기(빈 칸 안 남음). 표 안의 표도 줄 묶기.
+          OCR 글자 오류는 그대로("칭의적", "ⅡI") — [46]. 학년·학기를 구조화해 쓰려면 여전히 course_detail이 맞음.
 
 [48] 벡터 검색 인덱스 없음, 업로드 본문의 1단계 연결 미정
   - 발견: 2026-11-03, RAG 구현(engine/rag/store.py, backend/app.py)
@@ -576,3 +600,268 @@ CareerQuest 문제점 · 수정할 부분 목록
           (2) POST /upload는 본문만 돌려주고, StudentInput에 업로드 본문 칸이 없어 1단계가 아직 읽지 않음. 형식 합의(재열·용재) 필요.
           (3) .doc(Word 97-2003) 추출은 표본 파일이 없어 시험 못 함 (HWP·HWPX·DOCX·TXT·PNG·PDF는 시험함).
           (4) 2단계 근거 추출이 RAG 검색(store.search → get_document 본문 전체)을 아직 쓰지 않음 — 교내 슬롯 연결이 다음 작업.
+              → 2026-11-03 해결, [52] 참고. (1)~(3)은 남음
+
+[49] 3단계 집계 표의 skill_id가 null인 줄을 Gap API가 받지 못함 — 처리 방식 합의 필요 (해결)
+  - 발견: 2026-11-03, PR #9(인호) 병합 확인
+  - 위치: engine/schemas/aggregate.py (SkillRow.skill_id: int | None), src/gap_service.py (SkillRowForGap.skill_id: int > 0), main.py (POST /api/gap/calculate)
+  - 내용: 3단계는 DB Skill 사전에 없는 Skill(또는 사전을 못 읽은 경우 전부)을 skill_id null로 남기는데, Gap 입력은 양의 정수만 받아
+          AggregationResult.skills를 그대로 넘기면 422. skill_id 있는 줄만 거르면 사전에 없는 근거(새 기술·도구)가 Gap에서 통째로 빠져 한정적.
+  - 방향(논의): null 줄은 Gap 대상에서 빼되 "판단 불가"로 따로 돌려줄지, 사전에 새 Skill 후보로 넣을지, 이름으로 학생 보유 항목과 비교할지 — 인호와 합의.
+  - 해결: 2026-11-03 · 인호와 합의 — 매핑 안 된 항목은 없애지 않고 "매핑되지 않음"으로 명시
+  - 방법: engine/schemas/aggregate.py SkillRow에 계산 칸 mapping("매핑됨"/"매핑되지 않음", skill_id 유무)을 추가해 JSON에 같이 나가게 함.
+          render_table은 사전 없음 대신 "매핑되지 않음". src/gap_service.py(인호): SkillRowForGap.skill_id를 int | None(null 허용)으로,
+          skill(이름) 칸 추가. GapType에 "매핑되지 않음". 중복 skill_id 검사·DB 유효성 검사·수준 비교는 매핑된 줄만.
+          null 줄은 보유 여부를 판단하지 않고 {skill_id: null, skill: 이름, gap: "매핑되지 않음"}으로 함께 반환. GapResultItem도 skill_id null·skill 이름.
+          main.py /api/gap/contract 예시·설명에 매핑 안 된 줄 추가.
+  - 확인: DB 함수를 가짜로 바꿔 SkillRow 4줄(23 보유, 41 미보유, null "Vector DB", null "LangGraph")을 model_dump 그대로 넣음 →
+          calculate_gap_request와 POST /api/gap/calculate(TestClient) 모두 422 없이 41 미보유 + 두 줄 "매핑되지 않음"(이름 포함), 23은 GAP 없어 빠짐.
+          유효성 검사에는 [23, 41]만 감.
+  - 남은 한계: 실제 DB(student·skill 테이블)로는 안 돌림. 프론트·4단계가 "매핑되지 않음" 줄을 어떻게 보여 줄지는 정해야 함.
+
+[50] API 서버가 둘로 나뉨 (main.py·backend/app.py) — 하나로 합치고 프론트 입력 저장·업로드 문서 RAG 연결 필요
+  - 발견: 2026-11-03, PR #9·#10 병합 확인
+  - 위치: main.py (인호: DB 조회·Gap), backend/app.py (용재: /upload·/rag/search·/rag/documents)
+  - 내용: FastAPI 앱이 두 개라 프론트(AWS /var/www/html)가 두 서버를 불러야 함. 프론트에서 입력한 학생 정보는 DB에 저장돼야 하고,
+          업로드 문서는 RAG로 가야 하는데 지금 /upload는 본문만 돌려주고 저장하지 않음("학생 개인 자료라 공용 벡터 DB에 넣지 않는다").
+  - 방향: 앱 하나로 합침(라우터 분리). 업로드 문서를 RAG에 넣을 때는 학생 문서를 공용 자료와 구분(raw_metadata에 student_id·공개 범위)해서
+          다른 학생 검색에 섞이지 않게 해야 함 — 저장 위치·형식은 인호(스키마)·재열(프론트)과 합의.
+
+[51] 문서 속 그림(붙여 넣은 스캔·캡처)을 읽지 않아 업로드 본문이 비어 버림 (해결)
+  - 발견: 2026-11-03, 업로드 형식 시험(사용자 PC의 DOCX 11개·HWP 12개·HWPX 2개, 내용은 보지 않고 글자 수만 확인)
+  - 위치: engine/rag/extract.py (_EmbeddedOCR, _docx, _hwp, _hwpx, _pdf, _image, _open_image), backend/app.py (UploadResult.ocr_images)
+  - 내용: 캡처 206장짜리 DOCX 보고서가 58자, 스캔 그림 3장짜리 DOCX가 28자만 나옴 — 글이 전부 그림 속. HWP·HWPX의 그림, 텍스트 PDF 쪽에
+          붙여 넣은 스캔 그림도 같은 문제. DOCX 글상자(w:txbxContent) 글도 python-docx Paragraph.text에 안 들어가 빠짐. HEIC(아이폰 사진)는 못 엶.
+  - 해결: 2026-11-03 · 문서 속 그림을 OCR해 그 자리에 "[그림 N]"으로 넣음, DOCX 글상자 읽기, HEIC·GIF 지원
+  - 방법: _EmbeddedOCR — 짧은 변 300px 미만(아이콘·로고)·같은 그림(해시) 건너뜀, 문서당 OCR_MAX_EMBEDDED(기본 40, .env)개까지, 넘으면 warnings.
+          DOCX: 문단·표 행마다 a:blip/v:imagedata의 관계 id → 그림 바이트, 글상자는 mc:Fallback 쪽을 빼서 두 번 안 나오게.
+          HWP: BodyText 그림 레코드(HWPTAG_SHAPE_COMPONENT_PICTURE, 71바이트 위치 BinItem ID) → BinData/BINxxxx(raw deflate 풀기)를 그 자리에, 본문에 없던 그림은 끝에.
+          HWPX: hc:img binaryItemIDRef → content.hpf의 BinData href. PDF: 글자 쪽에서 페이지 넓이 10% 이상이고 그 영역에 텍스트 층이 없는 그림만 그 영역을 그려 OCR.
+          그림 OCR이 있으면 method="mixed". requirements에 pillow-heif, opencv-contrib-python(이미 paddleocr가 설치) 명시.
+  - 확인: DOCX 캡처 보고서 58 → 18,078자(그림 40장 26초, 77장은 상한 경고), 스캔 DOCX 28 → 269자, HWP 9개 mixed(그림 1~5장, 0.2~4초).
+          POST /upload(TestClient)로 PNG·JPG·HEIC·GIF·TXT(CP949)·스캔 PDF·텍스트+그림 PDF·DOCX·HWP·HWPX 모두 200·ok, 이미지 4종은 같은 결과(1,409~1,417자).
+  - 남은 한계: DOC(Word 97)는 여전히 표본 없음(그림 OCR도 안 함). 배포용·암호 HWP는 못 읽음. 그림이 40장 넘는 문서는 뒤쪽 그림이 빠짐 —
+          업로드 시간(그림당 약 0.7~2초)과 맞바꾼 것이라 일괄 적재(ingest)에서는 OCR_MAX_EMBEDDED를 늘릴 것.
+          HWP 표는 칸 구분 없이 칸마다 한 줄로 나옴(HWPX·DOCX는 " | "). 캡처 속 코드·UI 글자도 그대로 들어가 본문이 길어질 수 있음.
+          업로드 API 시험 중 scan.png 1번이 Paddle 내부 오류(RuntimeError: std::exception)로 실패 — 같은 순서·스레드·30회 반복으로는 재현 안 됨.
+          ocr.py에서 모델 생성도 잠그고(미리 올리는 스레드와 첫 요청의 경합) RuntimeError면 한 번 다시 시도하게 함. 다시 보이면 원인 조사.
+
+[52] 2단계 근거 추출에 RAG 검색 연결 (해결)
+  - 발견: 2026-11-03, [48]-(4) (사용자 요청 "2단계에 rag검색 연결")
+  - 위치: engine/tools/rag_search.py (새 파일: search_rag, rag_doc_id), engine/pipeline/stage2_evidence.py (RagState, SLOT_DOC_KINDS, RAG_K,
+          plan_search, EvidencePool._header·render_titles·render_slot, ExtractionResult.rag_error, extract_evidence(use_rag)),
+          engine/rag/store.py (search doc_kinds), engine/schemas/evidence.py (Provider "rag", Kind "document"),
+          engine/prompts/stage2_evidence.py (SELECT_REQUEST·READ_REQUEST), engine/pipeline/stage3_aggregate.py (역할 LLM 출처 표시), engine/rag/ingest.py (--doc-kind 도움말)
+  - 내용: 데이터 우선순위 1순위인 건양대 RAG 자료를 2단계가 쓰지 않아 교과목 슬롯이 뉴스 기사("건양대, 데이터의학과 신설")로만 채워짐.
+  - 해결: 2026-11-03 · 검색어마다 RAG를 검색 API보다 먼저 찾아 근거 풀 맨 앞에 넣고, 슬롯마다 문서 종류(doc_kind)로 거름
+  - 방법: search_rag가 store.search(조각 유사도) → get_document(본문 전체)를 EvidenceDoc(provider "rag", fetch_status "ok",
+          doc_id = "rag://source_document/<id>" 해시 16자) + texts로 바꿔 검색 API와 같은 RequirementSearchResult로 돌려줌 → pool.add 그대로.
+          선택 목록에서 RAG 문서를 "(DB 자료)"로 맨 앞에 두고 선택 프롬프트에 "가장 먼저 고른다". 읽기·verify·3단계는 바꿀 것 없음(본문이 texts에 있음).
+          처음엔 교내 슬롯만 school=건양대학교로 거르고 나머지는 유사도(0.55)만 봤더니 교육과정이 채용 요건·자격증·공모전·포트폴리오
+          목록에도 "(DB 자료)"로 맨 앞에 들어감 — 무관 슬롯 검색어 0.55~0.62가 맞는 슬롯(교내 프로그램 0.60)과 겹쳐 점수로 못 가름.
+          → SLOT_DOC_KINDS(교과목: 교육과정·수업계획서·로드맵 / 교내 프로그램: 비교과·교내프로그램 / 채용공고 / 자격증 /
+          공모전·대외활동·지역프로그램 / 프로젝트)로 raw_metadata doc_kind를 거름(store.search doc_kinds).
+          과목이 많은 교육과정에서 개론·용어 과목부터 쓰고 학과 소개를 기타 카드로 만들어 상한(8장)을 써서, 읽기 요청에
+          "직무·관심 분야 관련 과목부터, 학과 소개·교육목표 문장은 카드 안 만듦"을 넣음.
+          DB 접속 실패는 RagState가 한 번 경고 후 그 실행에서 RAG를 끄고 검색 API로만 진행(rag_error에 남김).
+  - 확인: 시험 DB(conda postgresql 16 + pgvector, 포트 55432, alembic upgrade head)에 의료인공지능학과 교육과정 PDF(21쪽 OCR, 조각 38개) 적재.
+          학생: 의료인공지능학과 3학년, 의료 AI 개발자, "병원 데이터로 딥러닝 모델… 학교에서 어떤 과목?"
+          RAG 끔: 교과목 카드 2장(둘 다 뉴스 기사의 과목 나열, 학년·학기 없음).
+          RAG 켬(필터 전): 교과목 카드 5장이 교육과정 표 행에서(학년·학기 포함) — 개론·병원용어 위주, 교육과정이 다른 슬롯에도 섞임.
+          RAG 켬(필터·프롬프트 후): 교육과정은 교과목 검색에만 나옴, 교과목 카드 8장 모두 교육과정 표 행
+          (딥러닝 영상처리 3-1, 딥러닝 생체신호의처리 3-2, 딥러닝자연어처리 3-2, 의료영상데이터분석 4-1, EMR데이터분석 2-2 등).
+          RAG 문서 카드는 verify에서 버린 것 0장. 2단계 91~94초(RAG 검색은 검색어당 0.1초 안팎). DB 꺼짐(포트 1) → RagState 경고 1회·None.
+  - 남은 한계: (1) 슬롯 수는 고유 문서 수라 교육과정 1건으로는 교과목이 1/3 — 루프가 웹에서 교과목 문서를 더 찾느라 바퀴를 씀.
+              공식 교육과정은 한 문서로 충분한 경우가 많아, RAG 교내 문서는 다르게 셀지 논의 필요.
+          (2) doc_kind 이름은 적재 때 손으로 넣는 값이라 수집 쪽(인호)과 이름을 맞춰야 함. 목록에 없는 종류·doc_kind 없이 넣은 문서는 2단계가 못 찾음.
+          (3) 시험 DB에 문서가 1건뿐 — 학과가 여러 개 들어가면 학생 전공(department)으로 거르거나 앞에 둘지 검토. 지금은 유사도·선택 LLM에 맡김.
+          (4) OCR 오자가 quote에 그대로 남음("데이터사이언스를 한파이썬") — 원문 대조는 통과하므로 [46] OCR_FIXES로 고쳐야 함.
+          (5) 3단계 문서 역할(DocRole)에 "교육과정"이 없어 교육과정 문서는 교육프로그램·기타로 분류됨.
+
+[53] 인호 DB(source_document)의 자료가 RAG 검색에 안 걸림 — 조각·임베딩이 없음 (해결)
+  - 발견: 2026-11-03, [52] 뒤 확인 (사용자 질문 "인호가 RAG까지 구현해 놓은 건가")
+  - 위치: engine/rag/index.py (새 파일), engine/rag/store.py (write_chunks 분리, search 필터를 조각 metadata로)
+  - 내용: 인호 로더(src/loaders: course·job·direct_job·qnet·university)는 upsert_source_document로 본문을 source_document에 넣지만
+          document_chunk(조각·embedding)는 만들지 않음(src/ 전체에서 DocumentChunk는 모델 정의뿐). 2단계 RAG 검색은 조각 벡터로 찾으므로 안 걸림.
+          또 upsert_source_document는 다시 적재할 때 raw_metadata를 통째로 덮어써(common.py 395줄) 거기에 doc_kind를 넣으면 사라짐.
+  - 해결: 2026-11-03 · 조각이 없거나 본문·종류가 바뀐 source_document 행에 조각·임베딩을 붙이는 index.py, 필터 메타는 조각 metadata에
+  - 방법: load_candidates가 source_document + resource(resource_type) + 지금 조각 상태(수·content_hash·doc_kind)를 읽음.
+          doc_kind_of: 자원 COURSE→교육과정, CERTIFICATE→자격증, JOB→채용공고, PROGRAM→비교과(source_name·제목에 KONYANG·건양)/지역프로그램,
+          자원 없으면 SYLLABUS→교육과정, CERTIFICATE_INFO→자격증, NOTICE→채용공고. SEARCH_RESULT(검색 요약)·KCUE 대학학과 목록은 안 넣음.
+          (처음엔 NOTICE를 자원보다 먼저 봐서 프로그램 공지가 채용공고로 들어감 → 자원 종류 우선으로 고침)
+          needs_index: 조각 없음 → 새로, 조각 content_hash ≠ 문서 content_hash → 다시, 조각 doc_kind ≠ 규칙 결과 → 다시(규칙을 고치면 자동 반영).
+          조각 metadata = doc_kind·school·department·curriculum_year·source_name·document_type·resource_type·content_hash.
+          store.search의 filters·doc_kinds를 d.raw_metadata에서 c.metadata로 바꿈(ingest는 원래 메타를 조각에도 복사해 그대로 동작).
+          store.ingest도 조각에 content_hash를 남김. 예전 ingest 조각(content_hash 없음)은 건너뜀.
+  - 확인: 시험 DB에 인호 upsert_source_document로 8종 행을 넣음(교육과정 문서·COURSE·CERTIFICATE·JOB·건양대 PROGRAM·대전 PROGRAM·SEARCH_RESULT·KCUE).
+          --dry-run → 넣을 6건·건너뜀(이미 조각 1·검색 요약 1·학과 목록 1). 실행 6.5초. 다시 실행 → 0건.
+          규칙 수정 후 → 프로그램 2건 "종류 바뀜"으로 다시 만듦. 교육과정 본문을 바꿔 다시 upsert → 그 1건만 "본문 바뀜", raw_metadata가 덮여도 조각 doc_kind 유지.
+          2단계 RagState 슬롯 검색: 교과목→교육과정 PDF 0.70·교과목 개요 0.64·강화학습 0.63, 교내 프로그램→건양대 캠프 0.81,
+          채용 요건→의료 AI 연구원 0.76, 자격증→ADP 0.63, 공모전→대전 해커톤 0.65, 포트폴리오→없음(그 종류 문서 없음). 다른 슬롯으로 새지 않음.
+  - 남은 한계: (1) doc_kind 대응은 가정 — 인호와 확인할 것(특히 PROGRAM의 교내/지역 구분을 source_name·제목의 "KONYANG/건양"으로 함).
+              (2) 인호 로더를 돌린 뒤 python -m engine.rag.index를 따로 실행해야 함. 로더 끝에 부르게 할지 인호와 합의.
+              (3) 과목 하나 = 문서 하나(COURSE 행)라 짧은 문서가 많아짐 — 슬롯 수(고유 문서)가 과목 수로 차서 [52]-(1)과 반대로 쉽게 참.
+              (4) 실제 인호 데이터로는 아직 안 돌림(시험 행만). 큰 데이터에서는 HNSW 인덱스([48]-(1)) 필요.
+
+[54] 교과목 추천: 최대 5개, 학생 학년 이상만, 교양 우선(없으면 전공), 슬롯을 과목 수로 셈 (해결)
+  - 발견: 2026-11-03, 사용자 요청 + [52]-(1)·[53]-(3)(교육과정 1건은 1/3, 과목마다 1건인 COURSE 행은 과목 3개로 바로 3/3)
+  - 위치: engine/pipeline/stage2_evidence.py (SLOTS, SCHOOL_SELECT_PER_SLOT, MAX_COURSES, RAG_K_SCHOOL, COURSE_CODE, course_info, course_key,
+          pick_courses, slot_docs, select_docs, verify, make_target, extract_evidence), engine/schemas/card.py (EvidenceCard.grade·course_type),
+          engine/prompts/stage2_evidence.py (SLOT_GUIDE·SLOT_TASKS 교과목, READ_REQUEST)
+  - 내용: 교과목 추천 수 제한·학년 고려·교양 우선이 없었고, 슬롯을 고유 문서 수로 세서 문서를 어떻게 쪼갰느냐에 따라 너무 일찍/늦게 끝남.
+  - 해결: 2026-11-03 · 교내 슬롯은 서로 다른 과목·프로그램 수로 세고(교과목 5·교내 프로그램 3), 학년·교양/전공은 코드가 원문 표에서 읽음
+  - 방법: course_key = 과목 코드(\d{5}[A-Z], 61922A·00076K) 또는 공백 뺀 과목명. 교내 슬롯 목록에 RAG 문서가 있으면 6건까지 고르고(웹 문서는 2건까지), RAG_K_SCHOOL 6.
+          course_info: 인용이 든 줄을 원문에서 찾아 위쪽의 칸 수 같은 머리글 줄의 "학년" 칸(또는 "이수 시기" 3-1) 값을 읽고, 표가 아니면 "N학년".
+          교양/전공은 위쪽에서 가장 가까운 표 제목(교양…일람표 → 교양, 전공·현장실습 → 전공). make_target에 "학년: N학년 (N학년 이상 과목만 추천)".
+          학년 < 학생 학년이면 버림(past_grade, 학년 모르면 남김). 끝에 pick_courses가 교양 → 전공 → 모름 순으로 MAX_COURSES(5)개 과목만 남김(over_courses).
+          처음엔 학년·교양/전공을 읽기 LLM 칸으로 받음 → 기본값을 두면 15과목 모두 null, 필수로 하면 학점 칸을 학년으로 읽고(4학년 과목 2개를 3으로)
+          카드마다 출력이 늘어 웹 문서 8건 묶음이 num_predict(8192)에서 잘림(채용 요건·자격증 0, 158~164초) → LLM 칸을 없애고 코드로만 읽음.
+  - 확인: course_info 단독 9경우(전공 3·4학년 행, 4학년 "61933A | 강화학습", 교양필수 사회진출성공전략 4·비판적사고와 글쓰기 1, 현장실습 3,
+          매트릭스 "3-1 | 61922A", 인호식 문장 "4학년 1학기") 모두 맞음. 3학년 학생 1→2단계: 교과목 13~16개를 찾아 5개만 남김(딥러닝 생체신호의처리 3,
+          의료영상데이터분석 4, Clinical Data Warehouse 분석 3, 병원인공지능실무-1·2 4), 1·2학년 과목 카드는 버림(past_grade 2) 또는 LLM이 안 만듦.
+  - 남은 한계: (1) 교양은 3회 모두 0개 — 시험 DB의 교양은 교양필수 표(대부분 1·2학년)뿐이고 3학년 이상은 사회진출성공전략 1개라 전공으로 채움.
+              휴머니티칼리지 중점교양·전문교양 일람표를 RAG에 넣어야 교양 우선이 의미 있음.
+          (2) 교양필수·전공필수도 "필수"라 추천 의미가 약함 — 교양선택·전공선택만 추천할지 논의 필요(지금은 교양/전공만 구분).
+          (3) 인호 COURSE 행은 표 제목이 없어 교양/전공을 모름(=맨 뒤) — 인호 course_detail의 이수구분을 본문이나 메타에 넣으면 해결.
+          (4) 과목 5개 상한은 2단계에서 자름. 4단계(우선순위 판단)가 생기면 그쪽으로 옮길 것.
+
+[55] 채용 요건·자격증이 0건으로 끝나는 경우 — 필수 슬롯으로 보장 (해결)
+  - 발견: 2026-11-03, [54] 시험 중 읽기 출력 잘림·시간 상한으로 채용 요건 0·자격증 0 (사용자: "요건이랑 자격증은 무조건 추천")
+  - 위치: engine/pipeline/stage2_evidence.py (REQUIRED_SLOTS, REQUIRED_EXTRA_ROUNDS, extract_evidence)
+  - 해결: 2026-11-03 · 채용 요건·자격증을 필수 슬롯으로 — 계획·선택·읽기 순서 맨 앞, 상한에 닿아도 0건이면 그 슬롯만 한 바퀴 더
+  - 방법: 바퀴마다 부족한 슬롯을 필수 슬롯 먼저로 정렬(선택 문서 순서 = 읽기 묶음 순서라, 출력이 잘려도 _salvage_cards가 앞쪽 카드를 살림).
+          시간(MAX_SECONDS)·바퀴(MAX_ROUNDS) 상한에 닿았을 때 필수 슬롯이 0건이면 그 슬롯만 REQUIRED_EXTRA_ROUNDS(1)바퀴 더, 그래도 0건이면
+          "필수 슬롯 비어 있음" 로그를 남기고 끝냄.
+  - 확인: LLM·검색을 가짜로 바꾼 분기 시험 — 1바퀴 후 시간 초과·두 슬롯 0건 → 2바퀴는 [채용 요건, 자격증]만, 3바퀴 없이 종료(로그에 비어 있는 슬롯).
+          실제 1→2단계(3학년 의료 AI 개발자): 채용 요건 5/4(RAG 공고 포함 자격요건·우대사항·기술스택 10장), 자격증 1/3(AICE·ADsP), 96초.
+  - 남은 한계: 필수 슬롯을 앞에 두니 같은 90초 안에서 교내 프로그램·공모전·포트폴리오가 0건이 됨(이전 실행은 각 1~3).
+          자격증은 "0건이 아니면" 보장이라 1/3에서 멈춤. 시간 상한(90초)을 늘리거나 필수 슬롯 최소 수를 정할지 논의 필요.
+
+[56] 학교 데이터 우선순위: 교내 활동·교내 공모전 > 교과목, 시간 상한을 실험 평균으로 (해결)
+  - 발견: 2026-11-03, 사용자 요청 ("교양필수도 학점에 맞춰 골라 들음", "교양필수가 직무와 무관할 수 있어 학교 데이터는 교내 활동·교내 공모전이 더 중요",
+          "시간 120초까지 늘리고, 다 채울 때까지 걸리는 시간을 평균 내서 최소값으로")
+  - 위치: engine/pipeline/stage2_evidence.py (SLOTS "교내 활동", SCHOOL_SLOTS, SLOT_PRIORITY, FIRST_QUERIES, SLOT_DOC_KINDS, MAX_ROUNDS, MAX_SECONDS),
+          engine/prompts/stage2_evidence.py (SLOT_GUIDE, SLOT_TASKS, SELECT_EXTRA, READ_SYSTEM 교내프로그램·대외활동, READ_REQUEST 교과목)
+  - 해결: 2026-11-03 · 슬롯 "교내 프로그램" → "교내 활동"(비교과·교내 프로그램·교내 공모전·경진대회), 슬롯 처리 순서를 정하고 교과목을 맨 뒤로,
+          시간·바퀴 상한을 실험으로 정함
+  - 방법: SLOT_PRIORITY = 채용 요건·자격증(필수) → 교내 활동 → 공모전·대외활동(외부만) → 포트폴리오 → 교과목. 바퀴마다 이 순서로 계획·선택·읽기
+          (출력이 잘리거나 시간 상한에 닿으면 뒤쪽이 먼저 빠짐). 건양대 주최 대회는 대외활동이 아니라 교내프로그램 카드로, 교내 활동 RAG는
+          비교과·교내프로그램·공모전·대외활동 종류를 school=건양대학교로. 교과목은 직무와 관련 있는 과목만(교양이라도 무관하면 안 만듦), 관련 과목 중 교양 먼저.
+          [54]-(2) "교양필수는 필수라 추천 의미가 약함"은 사용자 설명(여러 과목 중 학점에 맞춰 골라 들음)으로 추천 대상 유지.
+          시간: 시간 상한 없이·바퀴 6까지 학생 3명(의료인공지능 3학년 의료 AI 개발자 / 2학년 데이터 분석가 / 4학년 백엔드 개발자)으로 잼.
+  - 확인: 다 찬 시점 148초(6바퀴), 261초(6바퀴, 2바퀴가 읽기 출력 잘림으로 152초), 데이터 분석가는 6바퀴 158초에도 교내 활동 1/3로 못 채움.
+          다 찬 2회 평균 204초 → MAX_SECONDS 205, 세 번 모두 6바퀴가 필요해 MAX_ROUNDS 3 → 6.
+          필수 슬롯(채용 요건 4·자격증 3)만 보면 119초·88초·227초(평균 145초).
+  - 남은 한계: (1) 표본 3회·시험 DB(학교 비교과 1건)라 교내 활동이 병목 — 실제 학교 데이터가 들어오면 다시 잴 것(timing 스크립트는 scratchpad, 필요하면 저장소로).
+          (2) 205초는 바퀴 시작 전 확인이라 실제 2단계는 최대 한 바퀴(20~150초) 더 걸릴 수 있음. 사용자 대기 시간으로 길 수 있어 프론트에 진행 표시 필요.
+          (3) 출력 잘림([36])이 한 바퀴를 150초로 늘리는 경우가 있음 — 읽기 묶음 크기(READ_BUDGET_CHARS) 조정 검토.
+
+[57] 슬롯 재구성: 교내 활동 + 공모전·대외활동 → 활동·공모전 6(건양대 먼저, 모자라면 검색 API), 자격증 4(어학 포함), 교과목 부족분을 넘친 항목으로 (해결)
+  - 발견: 2026-11-03, 사용자 요청. [56] 실험에서 교내 활동이 건양대 자료 부족으로 6바퀴에도 1/3에 멈춤
+  - 위치: engine/pipeline/stage2_evidence.py (SLOTS, SLOT_OF, SCHOOL_SLOTS, SCHOOL_CATEGORIES, ITEM_SLOTS, ITEM_CAPS, ACTIVITY_PER_DOC, SLOT_PRIORITY,
+          RAG_WIDE_SLOTS, SLOT_DOC_KINDS, FIRST/NEXT_QUERIES, EvidencePool.render_slot, item_keys, _counted_keys, apply_caps, slot_docs, fill_counts,
+          lacking_slots, extract_evidence, ExtractionResult.capped·borrowed·relabeled), engine/prompts/stage2_evidence.py (SLOT_GUIDE, SLOT_TASKS,
+          SELECT_EXTRA, READ_SYSTEM 자격요건·자격증, READ_REQUEST)
+  - 해결: 2026-11-03
+  - 방법: 슬롯 = 채용 요건 4(문서) · 자격증 4(서로 다른 자격증, item을 쉼표·슬래시로 나눠 셈) · 활동·공모전 6(교내프로그램+대외활동 카드, 서로 다른 활동) ·
+          추천 포트폴리오 2(문서) · 교과목 5(서로 다른 과목). 처리 순서도 이 순서.
+          건양대 우선: 활동·공모전 RAG는 비교과·교내프로그램·공모전·대외활동·지역프로그램(필터 없음), 선택 목록은 RAG 건양대 → RAG 기타 → 웹 건양대 → 웹,
+          검색 방향도 건양대 비교과·건양대 대회를 앞에. 추천 상한(apply_caps)에서 교내프로그램 → 대외활동 순으로 6개.
+          건양대 문서가 아닌데 교내프로그램으로 분류된 카드는 대외활동으로 고침(relabeled), 교과목은 그대로 버림.
+          어학 성적(TOEIC·TOEIC Speaking·OPIc·TOPIK·JLPT·HSK)은 자격요건이 아니라 자격증(READ_SYSTEM·READ_REQUEST·자격증 검색 방향).
+          교과목이 5개에 모자라면 활동·공모전 → 자격증 순으로 상한을 넘은 항목을 그만큼 더 남김(borrowed). 루프의 fill_counts도 이 몫을 교과목에 더해
+          학교 과목이 적어도 교과목 때문에 6바퀴를 다 돌지 않음.
+          처음 시험에서 공모전 공고 1건의 세부(혁신성 지표·장관상·수수료 면제)가 활동 5개로 세져 슬롯을 채움 → 활동은 문서당 2개까지만 세고(ACTIVITY_PER_DOC),
+          읽기 요청에 "활동 하나에 카드 한 장, 상금·심사 기준·혜택은 카드 안 만듦".
+  - 확인: 단위 — 교과목 2·활동 9(교내 3·외부 6)·자격증 6이면 교과목 부족 3만큼 활동 9개 모두 남기고 자격증 4, fill_counts 교과목 7(채움).
+          문서 하나의 활동 4개 → 2개만 셈. 실제(시간 상한 없음·6바퀴, 시험 DB):
+          3학년 의료 AI: 활동 6 = 건양대 AI 취업역량 캠프(RAG) + 대전 청년 AI 해커톤(RAG 지역) + 외부 경진대회 4, 자격증 AICE·ADsP·빅데이터분석기사 등, 168초(포트폴리오 1/2라 다 안 참).
+          2학년 데이터 분석가: 문서당 2개 적용 전 71초(활동 6 중 5개가 공모전 1건의 세부), 적용 후 94초에 전부 참(활동 6 = 외부 경진대회·인턴십·건양대 협약).
+          4학년 백엔드: 277초·6바퀴에도 활동 1/6(의료 AI 학과 RAG·검색에서 백엔드 관련 활동이 적음), 읽기 출력 잘림 1회.
+          시간 상한: 다 찬 경우 71·94초, 못 채운 경우 6바퀴 168·277초 → [56]의 205초 유지(다 찬 경우보다 넉넉하고 6바퀴 168초도 덮음).
+  - 남은 한계: (1) 자격증 4개 상한은 찾은 순 — 공고에서 요구한 자격증을 먼저 둘지(문서 역할 반영) 검토. 어학 성적 카드는 이번 3명에서 나오지 않아 실제로는 미확인.
+          (2) 3단계 EXACT_ONLY_CATEGORIES에 자격증이 있어 "TOEIC Speaking 120" 같은 어학 카드는 사전 이름과 정확히 같아야 skill_id가 붙음 — 사전에 어학 Skill·별칭 필요.
+          (3) backend4에서 일반 학과 소개 글("컴퓨터공학과 개요")의 과목이 교과목으로 들어감 — [39] is_school_doc가 본문에 "건양"만 있어도 통과.
+          (4) 활동 문서당 2개여도 공모전 1건의 "상 이름"이 두 번째 활동으로 들어가는 경우가 남음.
+
+[58] 슬롯 재구성 2: 교과목 슬롯 없앰 → 채용 요건 4·자격증 4·활동·공모전·교과목 8·추천 포트폴리오 3, 자격증은 채용 공고 빈도 순 (해결, 개선점 남음)
+  - 발견: 2026-11-03, 사용자 요청 ("자격증은 채용 공고에서 가장 많이 나오는 것", "교과목은 학생이 보고 고르는 것이고 계속 바뀌어 무조건 채울 필요 없음,
+          시간도 잡아먹음", "활동·공모전에 교과목 포함 8개, 교내 활동 → 외부 활동·공모전 → 교과목 순")
+  - 위치: engine/pipeline/stage2_evidence.py (ACTIVITY, SLOTS, ITEM_SLOTS, ITEM_CAPS, ACTIVITY_RANK, ACTIVITY_KIND_RANK, SLOT_PRIORITY, FIRST/NEXT_QUERIES,
+          SLOT_DOC_KINDS, EvidencePool.render_slot, _counted_keys, apply_caps, fill_counts), engine/prompts/stage2_evidence.py (SLOT_GUIDE·SLOT_TASKS·SELECT_EXTRA),
+          engine/rag/store.py (DocHit.doc_kind), engine/schemas/evidence.py (EvidenceDoc.doc_kind), engine/tools/rag_search.py
+  - 방법: 교과목 슬롯·빌려 오기(borrowed)를 없애고 교과목 카드를 활동·공모전·교과목 슬롯에 넣음. apply_caps: 활동·공모전·교과목 8은 교내프로그램 → 대외활동 →
+          교과목(교양 → 전공 → 모름), 자격증 4는 (채용 요건 카드가 나온 문서 = 채용 공고에 나온 문서 수, 전체 문서 수, 찾은 순).
+          RAG 검색 결과에 조각 doc_kind를 실어(EvidenceDoc.doc_kind) 선택 목록을 RAG 비교과 → RAG 공모전·지역 → RAG 교육과정 → 웹 건양대 → 웹 순으로.
+          활동 문서당 2개 제한은 교내프로그램·대외활동에만(교육과정 1건의 과목들은 제한 없음).
+  - 확인: 단위 — 자격증 SQLD(공고 2) → ADsP·TOEIC(공고 1) → 빅데이터분석기사(블로그) 순으로 4개. 실제(시간 상한 없음·6바퀴, 시험 DB, [57] 실험과 같은 학생 3명):
+          시간: 3학년 의료 AI 168초/6바퀴 → 75초/4바퀴(포트폴리오 1/3, 읽을 새 문서 없어 종료), 2학년 데이터 분석가 94초/4바퀴 → 159초/5바퀴(다 참),
+                4학년 백엔드 277초/6바퀴(활동 1/6) → 131초/3바퀴(다 참). 평균 180초 → 122초, 다 찬 경우 1/3 → 2/3.
+          품질: 자격증은 백엔드에서 정보처리기사·SQLD·AWS SAA(공고·글 여러 곳에 나온 것), 데이터 분석가 CHDA·ADP(RAG)·ADsP·SQLD. 포트폴리오는 3명 모두 3건 이상(이전 1~3).
+                활동은 백엔드가 1 → 5(KHD 경진대회·AI·SW 중심대학 경진대회·대전 해커톤 등), 데이터 분석가 외부 8.
+  - 남은 문제(다음 작업): (1) 교과목이 슬롯을 먼저 채움 — 의료 AI 학생은 교육과정 1건에서 과목 6개가 나와 1바퀴에 8칸 중 6칸이 차서
+              활동 검색이 멈춤(교내 0·외부 2, 이전 실험은 교내 1·외부 5). 루프에서 교과목은 몇 칸까지만 세야 함.
+          (2) 건양대 행사가 외부로 분류됨 — "AI·SW중심대학 디지털 경진대회(건양대 SW중심대학)", "KHD 경진대회(Konyang Health Datathon)"가 대외활동.
+              건양대 문서에서 item·quote에 건양이 있으면 교내프로그램으로 고쳐야 교내 우선이 동작.
+          (3) 활동이 아닌 것이 활동 카드로 — 팀 이름("Vertex 팀, 디딤 팀"), 도구("Nvidia MONAI, BIO Nemo"), 시설("의료데이터 안심존, GPU 서버").
+          (4) 포트폴리오에 교육 과정("K-디지털 트레이닝", "데이콘 강의")이 들어감.
+          (5) 의료 AI 학생에서 교내 캠프(RAG)가 이번엔 안 나옴 — (1) 때문에 2바퀴부터 활동 슬롯을 더 찾지 않음.
+
+[59] [58] 개선: 교과목은 8칸 중 3칸까지만 셈, "건양대" 행사 → 교내, 팀·도구·시설·강의 금지 명시 (해결, 일부 남음)
+  - 발견: 2026-11-03, [58] 실험 남은 문제 (1)~(4) (사용자: 1번 그대로, 2번은 "건양"이 아니라 "건양대"로, 3·4번 명시)
+  - 위치: engine/pipeline/stage2_evidence.py (COURSE_FILL_MAX, SCHOOL_EVENT_MARK, slot_docs, fill_counts, extract_evidence, ExtractionResult.to_school),
+          engine/prompts/stage2_evidence.py (READ_SYSTEM 프로젝트, READ_REQUEST)
+  - 방법: slot_docs가 교과목 항목에 "교과목:" 표시를 붙이고 fill_counts가 활동·공모전·교과목에서 교과목을 COURSE_FILL_MAX(3)개까지만 셈(최종 8개는 apply_caps 순서 그대로).
+          건양대 문서(is_school_doc)의 대외활동 카드 중 item·quote에 "건양대"가 있으면 교내프로그램(to_school).
+          읽기 요청: 팀 이름·수상자·사용 도구·시설은 활동 카드 금지, 강의·교육 과정(부트캠프·K-디지털 트레이닝·온라인 강의)은 프로젝트 카드 금지.
+  - 확인: 같은 학생 3명·같은 조건. 시간 [57] 평균 180초 → [58] 122초 → [59] 121초(124·117·123초), 다 찬 경우 1/3 → 2/3 → 1/3
+          (의료 AI는 포트폴리오 문서 1/3, 데이터 분석가는 활동 6/8로 6바퀴 종료).
+          교내 활동(교내/외부): 의료 AI [57] 1/5 → [58] 0/2 → [59] 2/3(건양대 AI 취업역량 캠프 RAG, Konyang Health Datathon을 교내로 고침),
+          데이터 분석가 1/5 → 0/8 → 3/2(캠프·건양대 의료데이터 해커톤·인턴십), 백엔드 1/0 → 1/4 → 4/2(캠프·KY 리더스캠프·인턴십·산학협력).
+          교과목: 의료 AI 3개(딥러닝 영상처리·생체신호·자연어처리, 모두 RAG 표). to_school 1·2·2건.
+  - 남은 한계: (1) 웹 뉴스의 문구가 교과목 카드로 남음 — "의료 AI"·"데이터 분석"(학년 None), "의료인공지능 분야 인재 양성 교육과정".
+              교과목은 RAG 문서이거나 quote에 과목 코드가 있을 때만 받는 규칙이 필요.
+          (2) 프롬프트만으로는 일부 남음 — "Nvidia MONAI, BIO Nemo"(도구)가 여전히 활동, "네이버클라우드 아카데미"(교육 과정)가 포트폴리오.
+              활동 item에 대회·공모전·해커톤·캠프·프로그램·인턴·챌린지 같은 말이 없으면 빼는 코드 검사 검토.
+          (3) 포트폴리오는 문서 수로 세서 의료 AI는 항목 4개(문서 1건)인데 1/3 — 6바퀴를 다 씀. 포트폴리오도 항목 수로 셀지 논의.
+          (4) 시험 DB가 작아(학교 비교과 1건) 교내 활동 대부분이 웹 뉴스("건양대 …")에서 옴. 실제 비교과 데이터로 다시 잴 것.
+
+[60] 포트폴리오를 항목 수로, 교과목은 학교 DB·과목 코드만, 활동 이름 코드 검사, 교과목 인용을 원문 행으로 바로잡기 (해결, 일부 남음)
+  - 발견: 2026-11-04, [59] 남은 한계 (1)~(3) (사용자: "포트폴리오는 문서 하나당 서로 다른 포트폴리오가 나오면 항목 하나로", 1·2번 고치기)
+  - 위치: engine/pipeline/stage2_evidence.py (SLOTS 포트폴리오, ITEM_SLOTS, ITEM_CAPS, ACTIVITY_WORD, apply_caps.portfolio_ranked, verify, _course_row,
+          extract_evidence, ExtractionResult.not_course·not_activity)
+  - 방법: 포트폴리오를 ITEM_SLOTS에 넣어 서로 다른 포트폴리오 수로 세고(한 문서의 서로 다른 포트폴리오도 각각), 추천 3개는 여러 문서에 나온 순 → 찾은 순.
+          교과목 카드는 RAG 문서이거나 quote에 과목 코드가 있을 때만(not_course). 활동 카드는 item에 ACTIVITY_WORD(대회·공모·해커톤·~톤·챌린지·캠프·
+          프로그램·인턴·서포터즈·특강·세미나·포럼·설명회·산학·교육·프로젝트 등)가 없으면 버림(not_activity) — [59] 실험의 실제 항목으로 진짜 활동 10개 통과,
+          도구·시설·팀 이름·상 이름·심사 기준 5개 걸러짐.
+          첫 실험에서 교과목 카드 8장이 모두 대조에서 떨어짐 — 읽기 LLM이 표 행 끝에 다른 행의 비고("| 요소설계")를 지어 붙이고 D번호도 다른 학교 문서로 적음.
+          → _course_row: 교과목 인용이 안 맞으면 적힌 문서(먼저)와 같이 읽은 문서에서 같은 과목 코드와 과목명이 함께 있는 줄을 찾아 인용을 그 원문 줄로 바꿈.
+  - 확인: 실제 탈락 사례로 단위 확인 — "61922A | 딥러닝 영상처리 | … | 요소설계"(교과목 개요 문서로 적힘) → 그 문서의 과목 줄(3학년),
+          PDF로 적힌 것 → PDF 표 행(3학년·전공), 강화학습 → 4학년·전공, 없는 과목 코드 → 버림.
+          같은 학생 3명 실험: 120·134·145초(평균 133초, [59] 121초), 다 찬 경우 1/3(데이터 분석가).
+          교과목 — 의료 AI 5개(딥러닝 영상처리·생체신호·자연어처리 3학년, 의료영상데이터분석·강화학습 4학년), 데이터 분석가 3개(EMR데이터분석 2학년 등),
+          백엔드 0개(관련 과목 없음 — 맞음). 웹 뉴스 문구 교과목은 없어짐.
+          교내 활동 — 데이터 분석가 3(AI 취업역량 캠프·건양대 소셜벤처 해커톤·건양대 의료데이터 해커톤), 백엔드 1, 의료 AI 1("특강"뿐).
+          도구·시설·팀 이름 활동 카드 없음(not_activity 2·3·1장 버림).
+  - 남은 한계: (1) 포트폴리오에 교육 과정이 남음 — "K-Digital Training", "네이버클라우드 아카데미". 프롬프트([59])로 안 막힘 → 코드 검사(교육·아카데미·과정·부트캠프·
+              강의 단어가 있으면 프로젝트에서 뺌) 검토.
+          (2) 활동이 8칸을 못 채우는 학생이 많음(의료 AI 6/8 중 교과목 5, 백엔드 3/8) — 시험 DB에 학교 비교과·공모전 자료가 1~2건뿐. 실제 데이터로 다시 볼 것.
+          (3) 의료 AI 학생의 교내 활동이 "특강" 한 단어처럼 이름이 불분명한 경우가 있음.
+          (4) [59] 실험에서 읽기 출력이 잘려 카드 0장인 바퀴가 150초를 씀([36]) — 이번 실험엔 없었지만 다시 생길 수 있음.
+
+[61] 실험: 활동·공모전·교과목 우선순위를 외부 활동·공모전(검색 API) → 건양대 → 교과목으로 (실험, 결정 대기)
+  - 발견: 2026-11-04, 사용자 질문 ("건양대 데이터가 우선이라 줄어든 건가?") — [58]~[60]은 RAG를 6건까지 고르고 웹 문서는 바퀴당 2건이라
+          교육과정 같은 학교 문서가 자리를 먼저 차지하고 외부 공모전 글은 적게 읽힘
+  - 위치: engine/pipeline/stage2_evidence.py (ACTIVITY_RANK, ACTIVITY_KIND_RANK, ACTIVITY_WEB_SELECT, EvidencePool._activity_tier·render_slot, select_docs),
+          engine/prompts/stage2_evidence.py (SLOT_GUIDE, SLOT_TASKS·SELECT_EXTRA 활동·공모전·교과목)
+  - 방법: 추천 순서 대외활동 → 교내프로그램 → 교과목. 선택 목록은 외부(웹 비건양대 문서, RAG 공모전·대외활동·지역프로그램) → 건양대(웹 건양대 문서, RAG 비교과)
+          → 교육과정, 같은 단계 안에서 웹 먼저. 활동 슬롯의 웹 문서 선택 상한 2 → 4(ACTIVITY_WEB_SELECT). 검색 방향·선택 규칙도 외부 먼저.
+  - 확인(같은 학생 3명·같은 조건, [60] 건양대 우선 → [61] 외부 우선):
+          시간 120·134·145초(평균 133) → 185·215·174초(평균 191), 다 찬 경우 1/3 → 0/3, 6바퀴를 모두 씀.
+          활동(외부/교내/교과목): 의료 AI 2/1/5 → 4/3/1(가명정보 활용·K-CURE 데이터 활용·K-Health 미개방데이터 경진대회 등 외부 공모전이 늘고 교과목이 줄어듦),
+          데이터 분석가 2/3/3 → 3/2/3, 백엔드 2/1/0 → 2/1/3(외부 2개는 같은 대회 "중앙 해커톤"·"멋쟁이사자처럼 13기 중앙 해커톤", 교과목 3개는 병원 AI 과목이라 백엔드와 무관).
+          자격증: 의료 AI 4 → 2(AICE·ADsP), 포트폴리오: 데이터 분석가 3 → 1. 활동 글을 많이 읽느라 다른 슬롯 문서가 덜 읽힘.
+  - 남은 한계: (1) 같은 활동이 다른 이름으로 두 번 들어감(중앙 해커톤) — 이름 포함 관계로 묶는 중복 판단 필요.
+          (2) "AI 중심대학 특화 교육과정"처럼 "교육"이 들어간 사업 소개가 활동 단어 검사를 통과함.
+          (3) 백엔드 학생에게 의료 AI 과목이 붙음 — 교과목도 직무 관련만 만들라는 규칙이 9B에서 약함.
+
