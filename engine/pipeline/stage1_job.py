@@ -10,8 +10,8 @@
 - 관심 분야 확인 LLM(새 대화)이 interests를 관심/경험으로 다시 판정하고, 경험이면 projects로 옮김 ([24])
 - catalog_job이 표준 직무 목록에 있는지 확인 (없으면 null)
 
-표준 직무 목록(README: 인호 담당, 20~30개)이 아직 없어서 catalog는 선택 인자다.
-목록에 없는 직무를 검색으로 보완하는 부분은 아직 없다.
+표준 직무 목록(README: 인호 담당, 20~30개)은 catalog 인자로 받고, 안 주면 DB에서 읽는다(tools/job_catalog).
+DB가 꺼져 있거나 직무 테이블이 없으면 목록 없이 진행한다. 목록에 없는 직무를 검색으로 보완하는 부분은 아직 없다.
 """
 import json
 import re
@@ -19,6 +19,7 @@ import re
 from engine.llm import LLMConfig, chat
 from engine.prompts.stage1_job import CHECK_REQUEST, CHECK_SYSTEM, SYSTEM_PROMPT, USER_REQUEST
 from engine.schemas.job import Held, Interest, InterestCheck, StudentInput, TargetJob, TargetJobDraft
+from engine.tools.job_catalog import load_job_catalog
 
 JOB_SETTER = LLMConfig(temperature=0)
 INTEREST_CHECKER = LLMConfig(temperature=0)  # [24] 관심 분야 확인 (관심/경험)
@@ -49,11 +50,20 @@ def _keywords(keywords: list[str]) -> list[str]:
     return [k.strip() for k in keywords if k.strip()]
 
 
+def _mentioned(original: str, source: str) -> bool:
+    """[42] 원문이 학생 입력에 있는지. 통째로 없으면 띄어쓰기로 나눈 말이 모두 있는지 본다.
+
+    LLM이 보유 항목 원문의 조사를 빼고 이어 쓰는 경우("건양대에서 포스터 발표 우수상" → "건양대 포스터 발표 우수상")를 살린다.
+    """
+    words = original.split()
+    return _norm(original) in source or (len(words) > 1 and all(_norm(w) in source for w in words))
+
+
 def _held(drafts: list[Held], form: list[str], source: str, label: str, dropped: list[str]) -> list[Held]:
     """[24] 보유 항목: LLM이 뽑은 것 중 원문이 학생 입력에 있는 것 + 폼 칸 항목(LLM이 빠뜨린 것만 추가)."""
     out = []
     for h in drafts:
-        if _norm(h.original) in source:
+        if _mentioned(h.original, source):
             out.append(h)
         else:
             dropped.append(f"{label}: {h.original}")
@@ -76,6 +86,8 @@ def check_interests(student: StudentInput, interests: list[Interest]) -> set[int
 
 
 def set_target_job(student: StudentInput, catalog: list[str] | None = None) -> TargetJob:
+    if catalog is None:
+        catalog = load_job_catalog()
     catalog_text = ("표준 직무 목록:\n" + "\n".join(f"- {c}" for c in catalog)) if catalog else "표준 직무 목록: 없음"
     messages = [{"role": "system", "content": SYSTEM_PROMPT},
                 {"role": "user", "content": USER_REQUEST.format(student=render_student(student), catalog=catalog_text)}]
@@ -95,6 +107,9 @@ def set_target_job(student: StudentInput, catalog: list[str] | None = None) -> T
     # [24] 보유 항목(기술·자격증·프로젝트)도 원문 대조. 폼 칸에 적힌 것은 LLM이 빠뜨려도 합친다
     skills = _held(draft.skills, student.skills, source, "보유 기술", dropped)
     certificates = _held(draft.certificates, student.certificates, source, "자격증", dropped)
+    # [42] LLM이 자격증을 skills에도 넣는 경우가 있어 자격증과 같은 것은 skills에서 뺀다
+    cert_names = {_norm(n) for h in certificates for n in (h.original, h.name)}
+    skills = [h for h in skills if _norm(h.name) not in cert_names and _norm(h.original) not in cert_names]
     projects = _held(draft.projects, student.projects, source, "프로젝트", dropped)
     # 관심 분야로 들어오면 안 되는 것: 희망 직무 그 자체, 기업명이 든 표현 (LLM이 자주 섞음)
     not_interest = {_norm(student.desired_job or ""), _norm(draft.job_title)}

@@ -32,6 +32,7 @@ class LLMConfig:
     temperature: float | None = None   # None이면 모델 기본값(qwen3.5: 1.0)
     think: bool = False                # 사고 과정. 켜면 느려진다
     num_ctx: int = LLM_NUM_CTX
+    num_predict: int | None = None     # 출력 토큰 상한. None이면 제한 없음 (반복 출력이 컨텍스트 끝까지 가는 것 방지용)
 
 
 def chat(
@@ -50,6 +51,8 @@ def chat(
     options = {"num_ctx": config.num_ctx}
     if config.temperature is not None:
         options["temperature"] = config.temperature
+    if config.num_predict is not None:
+        options["num_predict"] = config.num_predict
     body = {"model": config.model, "messages": messages, "stream": False,
             "think": config.think, "options": options}
     if tools:

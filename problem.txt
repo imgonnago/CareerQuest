@@ -206,13 +206,25 @@ CareerQuest 문제점 · 수정할 부분 목록
   - 위치: engine/schemas/job.py (StudentInput)
   - 내용: README 화면 항목(전공·학년·희망 직무·보유 기술·자격증·프로젝트·비교과) + 자유 질문으로 임시 정의. 재열과 합의 필요.
 
-[21] 카드 item 하나에 Skill이 여러 개 있으면 첫 번째만 집계됨
+[21] 카드 item 하나에 Skill이 여러 개 있으면 첫 번째만 집계됨 (해결)
   - 발견: 2026-10-30, 3단계 테스트 ("백엔드 개발자")
   - 위치: engine/pipeline/stage3_aggregate.py (name_items), engine/prompts/stage2_evidence.py (READ_SYSTEM)
   - 내용: item "정보처리기사, AWS Solutions Architect Associate, OCP(Oracle…)" → 이름 뽑기 LLM이 정보처리기사 하나만 붙임.
           AWS SAA·OCP는 집계 표에서 빠짐.
   - 추가: 2026-10-30 [27] 수정 후에도 같음. item "InfiniBand/RoCEv2, GPUDirect RDMA, NCCL" → InfiniBand/RoCEv2만, "TOEIC Speaking 120 / OPIc IM2" → TOEIC만.
   - 메모: 2단계에서 카드 1장 = Skill 1개로 나눠 쓰게 하거나, 3단계 이름 뽑기가 항목마다 이름 목록을 내게 할 것.
+  - 해결: 2026-11-02 · 이름 뽑기 LLM이 카드마다 Skill 이름 목록을 내고, 카드 하나가 집계 표 여러 줄에 들어감
+  - 방법: schemas/aggregate.SkillNameDraft.name → names(목록), SkillNameList.names → items.
+          NumberedCard.skill·skill_id → skills·skill_ids·skill_names(매칭 전 이름) 세 목록(같은 순서로 짝).
+          stage3_aggregate._split_names가 번호를 떼고 띄운 "/"("Git / CLI / Linux")를 나누고(붙여 쓴 CI/CD·ETL/ELT는 그대로), 표기만 다른 것을 빼고,
+          MAX_NAMES_PER_ITEM(5)개까지. 모든 이름을 한꺼번에 합치기·사전 매칭한 뒤 카드마다 같은 skill_id가 두 번 붙지 않게 함.
+          build_table은 카드의 Skill마다 줄에 넣는다. NAME 프롬프트 "주로 말하는 하나만" → "서로 다른 것은 나눠 모두, 같은 것의 설명은 나누지 않음".
+          2단계 READ 규칙도 [42]의 "핵심 하나만 item" → "여러 개면 item에 쉼표로 모두".
+  - 확인: 저장한 2단계 결과(t1·t3)로 3단계만 다시 실행(인호 seed 사전 45개). Skill 2개 이상 카드 4·3장 —
+          "Git / CLI / Linux" → Git #32, CLI(null), Linux #33 / "TensorFlow / PyTorch / Pandas / NumPy / Matplotlib" → TensorFlow #25, PyTorch #24, Pandas·NumPy·Matplotlib(null).
+          사전 매칭 t1 35개 중 9개, t3 37개 중 15개.
+  - 남은 한계: "Docker / Kubernetes"의 Kubernetes가 Cloud #36으로 붙음([41] 남은 한계와 같음). "Python 라이브러리 (pandas, numpy, …)"를
+          t1은 4개로 나누고 t3은 통째로 둠(LLM 편차). 전형 절차("AI 코딩테스트", "LG Way Fit Test")가 기술스택으로 와서 Skill로 나뉨 — 2단계 분류 문제.
 
 [22] 2단계 item이 긴 문장이라 3단계에서 이름을 한 번 더 뽑아야 함
   - 발견: 2026-10-30, 3단계 테스트 ("데이터 분석가", 카드 12장)
@@ -384,7 +396,7 @@ CareerQuest 문제점 · 수정할 부분 목록
   - 진행: 2026-10-31 READ_REQUEST에 "자격증·기사·기능사 이름이 나오는 quote는 자격증" 추가, 읽기 입력에 문서를 고른 슬롯을 적음([37]).
           같은 프로필에서 자격증 카드 11장 모두 자격증으로 분류. 교과목은 여전히 학과·단과대 이름(AI·SW융합대학) — 검색 결과가 입시·협약 기사뿐.
 
-[36] 읽기 LLM 출력이 반복되다 잘려 JSON이 깨지면 2단계 전체가 멈춤
+[36] 읽기 LLM 출력이 반복되다 잘려 JSON이 깨지면 2단계 전체가 멈춤 (해결)
   - 발견: 2026-10-31, AI 개발자·삼성 프로필 테스트 2바퀴 (건양대 문서 8건 읽기)
   - 위치: engine/pipeline/stage2_evidence.py (read_cards)
   - 내용: 출력이 57,128자에서 끝나 json.loads가 JSONDecodeError("Unterminated string") → extract_evidence 전체가 예외로 끝남.
@@ -395,6 +407,11 @@ CareerQuest 문제점 · 수정할 부분 목록
           자격증 0/3 · 공모전·대외활동 1/2 · 추천 포트폴리오 1/2. 자격증 검색은 잘 됨(제목에 자격증이 있는 문서 22건,
           "AICE vs ADsP vs 빅데이터분석기사 비교" 등)인데 선택 LLM이 하나도 안 고름 → [30]. 삼성전자 제목 문서 38건 중 선택 1건(요약만).
           교과목 카드는 과목이 아니라 학과명(인공지능학과·국방XR학부) — 뉴스 기사라 과목 정보가 없음([35]).
+  - 해결: 2026-11-02 · 읽기 LLM 출력에 상한을 두고, 잘린 JSON에서 완성된 카드만 살림
+  - 방법: llm.LLMConfig에 num_predict 추가, stage2 READER = num_predict 8192. 잘리면 _salvage_cards가 JSONDecoder.raw_decode로
+          카드 객체를 앞에서부터 하나씩 읽어 완성된 것만 살리고 같은 (문서, 인용)은 한 번만 넣음. READ_BUDGET_CHARS 40,000 → 25,000 ([42]).
+  - 확인: 이전 — 2바퀴 출력 49,801자·읽기 403초·문서 6건 카드 0장. 이후 — 6144토큰에서 잘린 출력(17,274자)에서 카드 25장 살림,
+          25,000자 묶음·8192토큰으로 r6·r7 2회 잘림 없음(읽기 51초·66초). 잘린 경우 뒤쪽 문서 카드는 여전히 잃음.
 
 [37] 계획·선택을 가이드 슬롯마다 따로 부름, 공모전·대외활동은 여러 방면으로 검색
   - 발견: 2026-10-31, 사용자 결정 ("슬롯별로 나눠서 구현", "공모전·대외활동은 건양대뿐 아니라 외부도 여러 방면으로 검색")
@@ -426,3 +443,100 @@ CareerQuest 문제점 · 수정할 부분 목록
   - 내용: "인공지능학과 대학, 무엇을 배우고 2027 수시는 어떻게 준비할까"(skytori1211.tistory.com, 여러 대학 비교 글)의
           "파이썬", "수학·통계"가 교과목으로 통과. 본문 어딘가에 건양대가 언급돼 있으면 다른 대학 내용도 건양대 교과목으로 셈.
   - 메모: 제목·도메인(konyang.ac.kr)·출처에 건양이 있을 때만 통과시키거나, 인용(quote) 주변에 건양이 있는지 확인. RAG가 붙으면 교과목은 RAG 우선.
+
+[40] 1단계 표준 직무 목록을 DB에서 읽게 연결 — 직무 테이블 형식 합의 필요
+  - 발견: 2026-11-02, 사용자 요청 ("1단계에서 LLM이 DB에서 직무 목록 찾아서 이름 통일·일반화")
+  - 위치: engine/tools/job_catalog.py (load_job_catalog, JOB_QUERY), engine/pipeline/stage1_job.py (set_target_job)
+  - 내용: set_target_job(catalog=None)이면 load_job_catalog()가 DB(src/db/database.py)에서 직무 이름을 읽어 직무 설정 LLM에 준다.
+          DB 접속 실패·테이블 없음·빈 목록이면 None → 지금처럼 "표준 직무 목록: 없음"으로 진행 (경고 로그만).
+          README DB 구조에는 직무 테이블이 아직 없어서 JOB_QUERY("SELECT job_name FROM job")는 가정이다.
+  - 메모: 인호와 합의할 것 — 직무 테이블 이름·칸(직무명, 별칭, NCS 코드), 직무와 SKILL의 관계 테이블.
+          별칭이 있으면 LLM에 "표준명 (별칭: …)"으로 주면 통일이 더 잘 될 것. 목록이 수백 개로 늘면 bge-m3 임베딩(pgvector)으로
+          학생 희망 직무와 가까운 후보만 골라 주는 방식 검토. .env에 POSTGRES_* 값이 없고 이 WSL에는 docker가 없어 실제 DB 조회는 미확인.
+
+[41] 근거 집계 표의 Skill을 DB Skill 사전의 skill_id로 바꿈 (해결)
+  - 발견: 2026-11-02, 사용자 요청 (인호와 합의: 집계 표 JSON을 인호 코드로 넘겨 skill_id로 학생 보유/미보유 판단)
+  - 위치: engine/pipeline/stage3_aggregate.py (match_skills, render_matches, build_table, aggregate_evidence),
+          engine/prompts/stage3_aggregate.py (MATCH_SYSTEM·MATCH_REQUEST), engine/schemas/aggregate.py (SkillEntry, SkillMatchList,
+          NumberedCard.skill_id, SkillRow.skill_id·names, AggregationResult.skill_dict_loaded), engine/tools/skill_dict.py (load_skill_dict)
+  - 해결: 2026-11-02 · 이름 통일 뒤 DB Skill 사전에서 skill_id를 찾아 붙이고, 집계 표를 skill_id로 묶음
+  - 방법: 사전은 인호 브랜치(origin/inho src/db/models.py)의 skill·skill_alias 테이블을 읽는다(DB를 못 읽으면 None → skill_id 모두 null).
+          대표 이름·묶인 이름이 사전 이름·별칭과 표기만 다르면 코드가 바로 정하고, 나머지는 bge-m3 임베딩으로 사전 후보
+          (MATCH_MIN_SIM 0.65 이상, MATCH_TOP_K 5개)를 골라 사전 매칭 LLM(새 대화)이 S번호(= skill_id) 또는 "없음"을 고른다.
+          후보 밖 번호는 버린다. 찾으면 Skill 이름을 사전 이름으로 바꿔 같은 skill_id가 한 줄로 합쳐진다(Python·파이썬 → Python #1).
+          새 Skill은 만들지 않는다 — 인호 쪽 규칙("모델은 기존 Skill ID만 고름"). SkillRow.names에 매칭 전 이름을 남김.
+          유사도 하한 없이 물으면 9B 모델이 억지로 고름(ADsP→AWS 0.46, 학사 이상→LLM 0.54, CUDA→CI/CD 0.56, 정보처리기사→Computer Vision 0.60).
+  - 확인: 인호 seed_master 사전(45개)·이름 19개로 2회 — 파이썬·Spring Boot·RESTful API·도커·머신러닝·AWS 클라우드·OpenCV 등은 맞게,
+          ADsP·정보처리기사·학사 이상·CUDA·로봇공학개론·영어 회화는 null. 가짜 카드 12장으로 3단계 전체 실행 시 매칭 1.9초.
+          DB가 꺼져 있으면 경고만 남기고 이전처럼 이름으로 집계(skill_dict_loaded=False). 실제 DB 조회는 미확인(docker·POSTGRES_* 없음).
+  - 남은 한계: Kubernetes가 문맥에 따라 Cloud로 붙을 때가 있음(단독 2회는 null, 카드 문맥에선 Cloud). LLM 파인튜닝 → LLM처럼 세부가 뭉개짐.
+          자격증·학력·교과목은 Skill 사전에 없어 skill_id null — 자격증 보유 판단은 인호 쪽 CERTIFICATE 자원 id와 어떻게 맞출지 합의 필요.
+
+[42] LG·ADsP·SQLD 프로필 검색 품질 — 그룹 기업, 보유 항목 대조, 읽기 D번호 혼동, 분류 쏠림 (해결)
+  - 발견: 2026-11-02, 사용자 입력 "나는 python 개발자로 ai엔지니어가 되고싶어. 나는 LG쪽으로 들어가고 싶고, 자격증은 ADSP랑 SQLD 갖고있어.
+          뭐 활동은 건양대에서 포스터 발표 우수상 받았고, 지금 학부연구생을 하고있어." 로 1~3단계 7회 실행 (r1~r7)
+  - 내용(r1): 1단계 — "LG쪽"을 LG전자로 좁힘, ADSP·SQLD가 skills에도 들어감, "건양대에서 포스터 발표 우수상"을 LLM이
+          "건양대 포스터 발표 우수상"으로 옮겨 원문 대조에서 빠짐, "나는 python 개발자로"를 관심 분야로 넣음.
+          2단계 — 채용 요건이 "LG전자 채용 떴다! 지원기간·직무 한눈에" 같은 일정·전형 총정리 글만 골라 LG 카드 0장,
+          영문 자격증 목록(TensorFlow Developer Certificate 등)이 기술스택, 학과 신설 기사("데이터의학과")가 교과목.
+          (r2~r5) 읽기 출력 반복으로 403초, 문서 11건을 한 번에 읽히면 다른 문서 인용을 한 D번호로 몰아 적음(19장 모두 D104 → 대조 실패),
+          카드가 한 분류(기술스택)로 몰림, 포트폴리오 검색("LG AI연구원 포트폴리오 예시")에 LG–엔비디아 협력 뉴스가 나와 기업 사업이 학생 프로젝트로 들어감.
+  - 해결: 2026-11-02 · 1단계 프롬프트·대조 보완, 2단계 검색 방향·선택·읽기 규칙 보완, 인용으로 D번호 고치기, 카드 칸 순서 변경
+  - 방법: 1단계 — prompts/stage1_job: 그룹("LG쪽")은 name을 그룹명, keywords에 직무 관련 계열사 공식명(LG AI연구원·LG CNS·LG전자),
+            자격증은 skills에 넣지 않음, CHECK_SYSTEM에 "나는 ○○ 개발자"·"하고 있다"는 경험.
+            stage1_job._mentioned: 원문이 통째로 없으면 띄어쓰기로 나눈 말이 모두 학생 입력에 있는지 봄(보유 항목만). 자격증과 같은 skills는 코드가 뺌.
+          2단계 — SLOT_TASKS 채용 요건을 "기업 + 직무 + 자격요건/우대사항" 우선, 추천 포트폴리오에서 기업명 뺌.
+            PLAN_SYSTEM에 그룹이면 계열사 공식명으로 검색. SELECT_EXTRA 채용 요건(일정·전형·공고 모음 글 제외), 추천 포트폴리오(기업 사업·협력 뉴스 제외).
+            READ 규칙: 영문 자격증도 자격증, 학과 소개는 교과목 아님, 전형 절차는 기업정보, item에 "/"로 조건 잇지 않기, 기업 사업 소식은 프로젝트 아님.
+            verify: 적힌 문서에 인용이 없으면 같이 읽은 문서에서 찾아 한 곳에만 있으면 그 문서로 고침.
+            schemas/card.CardDraft 칸 순서 doc → quote → item → category → company (분류를 인용을 쓴 뒤 고르게).
+          3단계 — NAME 프롬프트에 자격요건 짧은 이름 예시(학사 이상·병역필), item 그대로 베끼지 않기.
+  - 확인: 1단계 2회 모두 LG(그룹)·[LG AI연구원, LG CNS, LG전자], certificates만 ADSP·SQLD, projects에 포스터 발표 우수상·학부 연구생·Python 개발, interests 없음.
+          r1 → r6·r7: 카드 31 → 29·37장, 채용 요건에 LG CNS·LG AI연구원 공고의 지원자격(졸업 예정·학사 이상·병역) 카드,
+          "LG CNS AI Genius 대학생 서포터즈"(r7). r6 분류 9종 고르게, r7 출력 잘림 없음. 전체 98초·123초.
+  - 남은 한계: 실행마다 편차가 큼(계획 LLM temperature 0.3 → 검색어·문서가 바뀜). LG 공고의 기술 요구사항은 거의 못 얻음 —
+          공식 공고(LG Careers)는 링크만 제공하고 블로그 정리 글은 일정·전형 위주. 교과목은 여전히 0~1/3(검색으로는 건양대 교과목 문서가 안 나옴, RAG 필요).
+          RAG 구현기 같은 글 하나에서 기술 이름 20개가 기술스택으로 쏟아져 표가 길어짐(r7). 학생이 이미 가진 ADsP도 추천에 나옴(Gap은 인호 쪽에서 판단).
+
+[43] 계획 LLM temperature 0, 문서당 카드 상한 (해결)
+  - 발견: 2026-11-02, [42] 남은 한계 (실행마다 편차가 큼, RAG 구현기 글 하나에서 기술 이름 20개)
+  - 위치: engine/pipeline/stage2_evidence.py (PLANNER, MAX_CARDS_PER_DOC, extract_evidence, ExtractionResult.over_cap),
+          engine/prompts/stage2_evidence.py (READ_SYSTEM·READ_REQUEST)
+  - 해결: 2026-11-02 · 계획 LLM temperature 0.3 → 0, 문서당 카드 최대 8장(프롬프트 + 코드)
+  - 방법: PLANNER = LLMConfig(temperature=0). 읽기 프롬프트에 "문서 하나에 카드 최대 8장, 중요한 것부터, 글에 예로 나온 도구·지표를
+          하나씩 다 카드로 만들지 않는다". 코드는 원문 대조·건양대 판정 뒤 문서당 MAX_CARDS_PER_DOC(8)장까지만 남기고 넘친 수를 over_cap에 기록.
+  - 확인: 같은 LG·ADsP·SQLD 입력 3회(t1~t3). 1바퀴 검색어 9개가 3회 모두 같고 2·3바퀴도 거의 같음(0.3일 때는 r1~r7마다 달랐음).
+          2바퀴 검색어 되풀이([34]) 없음. 문서당 최대 7·8·8장, over_cap 0 — 프롬프트만으로 지켜짐(코드는 안전장치).
+          카드 31·33·43장, 2단계 112·92·113초, 대조 실패 9·4·5장. LG Aimers 해커톤·LG AI 아카데미를 3회 모두/일부 찾음.
+  - 추가: 2026-11-02 temperature 0.2로 3회(u1~u3) — 1바퀴 검색어는 거의 같고 표현만 조금씩 다름. 2단계 83·144·175초, 카드 30·38·28장,
+          교과목 0·1·0(0일 때 1·2·1). Colab 튜토리얼 잡음은 없어졌지만 RAG 구현기 지표(Recall@k 등)·"AI 자격증 연봉 영향" 같은 잡음이 대신 들어옴.
+          품질은 그대로이고 편차·시간만 늘어 0으로 되돌림 (약점은 실행마다 고정돼 있어야 고치기 쉬움).
+  - 남은 한계: 결과가 일정해진 대신 같은 약점도 매번 반복됨 —
+          (1) 포트폴리오 튜토리얼 글(패션 쇼핑몰 추천)의 실습 단계(Google Colab 환경 설정, Google Drive Mount, Hugging Face 데이터셋 다운로드)가
+              기술스택 카드로 들어감(t1·t3).
+          (2) "Git / CLI / Linux", "Docker / Kubernetes"처럼 이름에 여러 Skill이 남음 → [21] (해결: 카드 하나에 Skill 여러 개).
+          (3) 데이터의학과 신설 기사의 교육 내용이 교과목·교내프로그램으로 들어감(t2 교과목 7장) — 과목명이 아님.
+
+[44] 사전 매칭 오매칭(같은 분야일 뿐인 기술, 자격증·프로그램 이름) · 전형 절차가 기술스택으로 옴 (해결)
+  - 발견: 2026-11-02, [21] 수정 뒤 LG·ADsP·SQLD 입력 3회(v1~v3, 인호 seed 사전 45개)
+  - 위치: engine/pipeline/stage3_aggregate.py (EXACT_ONLY_CATEGORIES, match_skills, check_matches, render_pairs, aggregate_evidence),
+          engine/prompts/stage3_aggregate.py (CHECK_SYSTEM·CHECK_REQUEST), engine/schemas/aggregate.py (MatchCheck, MatchCheckList),
+          engine/pipeline/stage2_evidence.py (SELECTION_STEP, SELECTION_FIX_CATEGORIES, verify)
+  - 내용: AWS AI Practitioner(자격증)·AWS 기반 AI 창업캠프(교내프로그램) → AWS, AWS Certified Machine Learning → Machine Learning,
+          Vector DB → RDBMS, LangChain → Machine Learning, 고성능 GPU 서버 → Backend Development.
+          유사도는 틀린 짝 0.65~0.72, 맞는 짝(LLM 파인튜닝→LLM 0.70, OpenCV→Computer Vision 0.66)과 겹쳐 MATCH_MIN_SIM으로는 못 거름.
+          "LG Way Fit Test, CNS 직무 특화 검사, AI 코딩테스트"가 기술스택 → Skill 3줄 (프롬프트 규칙 두 군데 있어도 안 지켜짐).
+  - 해결: 2026-11-02 · 자격증·과목·프로그램·대회 이름은 정확히 같을 때만 매칭, LLM이 고른 짝은 확인 LLM이 다시 봄, 전형 절차는 코드가 기업정보로
+  - 방법: 이름이 나온 카드 분류가 모두 EXACT_ONLY_CATEGORIES(자격증·교과목·교내프로그램·대외활동)면 사전 이름·별칭 대조만 하고 LLM에 묻지 않음.
+          사전 매칭 LLM이 고른 짝은 확인 LLM(새 대화)이 Gap 기준("공고가 A를 요구할 때 B를 가진 학생이 충족한다고 볼 수 있나")으로 예/아니오.
+          아니오·빠뜨림은 버리고 로그("사전 매칭 확인에서 뺌")를 남김. 예시: 같은 것·세부 기술·"역량·활용" 같은 말만 붙은 것은 예,
+          같은 분야의 다른 도구(LangChain→Machine Learning, Kubernetes→Cloud)·자격증 이름은 아니오.
+          2단계 verify가 item에 코딩테스트·인적성·Fit Test·면접·직무 특화 검사·서류/필기 전형이 있고 분류가 기술스택·자격요건·우대사항·기타면 기업정보로 바꿈.
+  - 확인: 확인 LLM 단독 — 정답을 붙인 짝 12개로 2회 10/12(맞는 짝 2개를 아니오), 예시 추가 후 17개로 2회 16/17
+          (틀린 1개는 Airflow→ETL 예 — MLflow→MLOps를 예로 둔 것과 같은 관계라 받아들임). 틀린 짝 6개는 매번 아니오.
+          전체 3회(w1~w3): LangChain→Machine Learning 매번 뺌, AWS SageMaker→AWS·AI·로보틱스→Machine Learning도 뺌.
+          자격증·프로그램 이름이 기술에 붙는 경우 없음. 전형 카드(LG Way Fit Test·AI 코딩테스트·PT 면접) 모두 기업정보.
+          w1·w3 결과가 똑같음(계획 temperature 0). 2단계 116·171·116초, 3단계 약 28초(이름 뽑기 19초·매칭 5초).
+  - 남은 한계: 확인 LLM이 보수적이라 맞는 짝을 버릴 수 있음(skill_id null → Gap 판단에서 빠짐). 프로젝트 이름이 합치기에서 Skill로 묶임
+          ("RAG 챗봇" → RAG, "LLM 리뷰 요약" → LLM) — Gap에는 크게 문제없지만 표에서 프로젝트 근거가 기술 줄로 들어감.
+          카드 분류는 여전히 기술스택이 절반 이상(45장 중 20~29장). 교과목은 3회 모두 1/3.
