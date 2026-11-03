@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 CareerQuest AI — 대학생(건양대·대전 지역) 맞춤 취업 준비 로드맵을 만드는 LLM + RAG 에이전트. 학생 프로필과 희망 직무를 받아 요구 역량과 비교하고, 교과목·자격증·공모전·지역 프로그램을 **근거(출처)와 함께** 추천한다. 설계 전체와 파트별 TODO는 `README.md`(작업용 초안)에 있다.
 
-- 현재 구현된 것은 `engine/`(검색 도구·크롤링·근거 풀/근거 카드 스키마·1~3단계 파이프라인)뿐이다. `backend/`, `frontend/`, `db/`, `data/`는 아직 비어 있다.
+- 구현된 것: `engine/`(검색 도구·크롤링·근거 풀/근거 카드 스키마·1~3단계 파이프라인·RAG `engine/rag/`), `backend/app.py`(업로드·RAG 검색 API), `frontend/index.html`(재열 UI), `src/`(인호: 수집기·로더·Skill 매핑·DB 모델), `alembic/`(DB 스키마). `db/`는 비어 있고 `data/raw`·`data/processed`는 git에서 제외.
 - 실행 환경: 로컬 Ollama(qwen3.5:9b Q4_K_M, bge-m3 임베딩 1024차원). 호출은 `engine/llm.py`의 `chat()`·`embed()`. **외부 LLM API는 사용하지 않는다.**
 - 코드 주석·docstring·커밋 메시지는 한국어로 쓴다.
 
@@ -18,6 +18,7 @@ pip install -r requirements.txt
 cp .env.example .env   # NAVER_CLIENT_ID / NAVER_CLIENT_SECRET / KAKAO_REST_API_KEY 등 채우기
 ```
 
+- DB: `docker compose up -d` → `alembic upgrade head`. pgvector 확장은 마이그레이션이 만든다.
 - 빌드·린트·테스트 설정은 아직 없다. 모듈은 저장소 루트에서 `python -c "from engine.tools.kakao import search_kakao; ..."`처럼 `engine.` 절대 import로 실행한다.
 - API 키는 `engine.config.require("KEY")`로 읽는다 (없으면 RuntimeError).
 - `docs/samples/*.json`은 각 검색 API·본문 수집 결과의 실제 샘플이다. API를 호출하지 않고 형태를 확인할 때 쓴다.
@@ -38,6 +39,13 @@ README의 5단계 파이프라인: (1) 목표 직무 설정 → (2) 근거 추�
 - **프롬프트 작성 요령(9B 모델)**: 시스템 프롬프트 규칙을 놓치는 일이 잦다. 자주 틀리는 규칙은 사용자 메시지 끝(출력 직전)에 한 번 더 적는다. 선택·추출처럼 짧은 판단은 긴 대화를 이어 가지 말고 새 대화로 필요한 입력만 준다. 사고 기능(think)은 정확도가 오르지만 수십 초가 걸려 기본은 끈다.
 - `engine/pipeline/stage2_evidence.py` — (2) 근거 추출. 입력은 1단계 `TargetJob`(`make_target`이 텍스트로 만듦). 학생에게 줄 정보를 **가이드 슬롯**(`SLOTS`: 교과목 3·교내 프로그램 2·채용 요건 4·자격증 3·공모전·대외활동 2·추천 포트폴리오 2, 수는 카드가 아니라 고유 근거 문서 수)으로 정해 두고, 한 바퀴마다 **부족한 슬롯마다 따로** 계획 LLM(새 대화, 슬롯 설명·검색 방향 `SLOT_TASKS`와 그 슬롯에서 쓴 검색어를 주고 `SearchPlan` JSON으로 검색어만 받음, 검색은 코드가 실행하고 문서마다 슬롯을 기록) → 선택 LLM(새 대화, 그 슬롯 검색 결과 중 안 읽은 문서 제목 목록에서 `SELECT_PER_SLOT`건을 `DocSelection` JSON으로) → 코드(고른 문서만 본문 수집) → 읽기 LLM(새 대화, 본문 전체를 `READ_BUDGET_CHARS`(25,000자) 단위로 문서째 묶고 문서마다 고른 슬롯을 참고로 적어 `CardDraftList` JSON, 출력 상한 `num_predict` 8192, 잘리면 `_salvage_cards`가 완성된 카드만 살림, 카드 칸은 quote → item → category 순) → 코드(`verify`: quote를 공백 무시하고 원문과 대조, 전형 절차(`SELECTION_STEP`)는 기업정보로 고침, 적힌 문서에 없으면 같이 읽은 문서 중 한 곳에만 있을 때 그 문서로 고침, 통과한 것만 `EvidenceCard`). 이 바퀴를 **추출 루프**로 슬롯이 다 찰 때까지 반복(`MAX_ROUNDS` 3·`MAX_SECONDS` 90, 바퀴 시작 전 확인). 한 번에 모든 슬롯을 계획·선택시키면 9B 모델이 일부 슬롯만 하거나 이전 계획을 되풀이해서 나눴다. 교내 슬롯(교과목·교내 프로그램)은 건양대 문서(`is_school_doc`)의 카드만 남긴다 — RAG가 없어 지금은 검색으로 채우고, RAG를 붙인 뒤에는 RAG 정보가 오래됐을 때 보충하는 경로. 공모전·대외활동은 건양대 교내 대회와 외부 공모전·해커톤·대외활동을 여러 방면으로 검색(`FIRST_QUERIES`). 검색어는 "대상(건양대·기업 공식명·직무·상위 분야) + 찾는 영역" 2~5단어. JSON 출력은 Ollama `format`에 pydantic 스키마를 넘겨 강제하고, D번호 칸은 정규식 패턴으로 묶는다(안 묶으면 제목까지 붙여 씀).
 - `engine/pipeline/stage3_aggregate.py` — (3) 근거 집계. 입력은 2단계 `ExtractionResult`. 코드((doc_id, quote) 중복 제거, 근거 번호 C1…) → 역할 LLM(카드가 나온 문서마다 채용공고·우대사항정리·자격증정보·프로젝트추천 등 `DocRole`, 제목·요약·카드 item으로 판단) → 이름 뽑기 LLM(item마다 짧은 Skill 이름 목록 — 여러 개면 나눠서, 카드 하나가 표 여러 줄에 들어감. 카드의 `skills`·`skill_ids`·`skill_names`는 같은 순서로 짝) → 코드(표기 병합, bge-m3 임베딩 후보 묶음) → 합치기 LLM(후보만) → 사전 매칭(DB Skill 사전 `skill`·`skill_alias`를 `engine/tools/skill_dict.py`가 읽음, 이름·별칭 표기 대조 → 나머지는 임베딩 후보(`MATCH_MIN_SIM` 이상) 중 사전 매칭 LLM이 고르거나 "없음" → 확인 LLM이 Gap 기준 예/아니오, 자격증·교과목·교내프로그램·대외활동 카드에서만 나온 이름은 정확히 같을 때만, 새 Skill은 만들지 않음) → 코드(skill_id(없으면 이름)별 가이드 슬롯·고유 문서 수·분류별·역할별·기업·근거 번호 `SkillRow`, 슬롯 순 정렬). 기업정보 카드는 집계에서 빼고, Gap(보유/미보유)은 집계 표의 `skill_id`로 인호 쪽 코드가 판단한다. DB를 못 읽으면 skill_id는 모두 null. `render_table`이 표 텍스트.
+- `engine/rag/` — RAG. **업로드(실시간)와 수집 데이터 적재(일괄)가 같은 추출기를 쓴다.**
+  - `extract.py`: 파일 → 본문 전체(`ExtractedDoc`). PDF(텍스트 층, 30자 미만 쪽은 OCR, 쪽마다 `[페이지 N]`)·이미지(OCR)·DOCX(표는 행을 ` | `로)·DOC(Word 97 조각 표)·HWP(OLE BodyText 문단, 배포용·암호는 `UnsupportedFile`)·HWPX(zip XML)·TXT(UTF-8→CP949).
+  - `ocr.py`: PaddleOCR(PP-OCRv5 mobile 검출 + korean 인식, CPU, 약 2초/쪽). 상자를 줄로 묶고 넓은 간격은 ` | `. 자주 틀리는 단어는 `OCR_FIXES`. paddlepaddle은 3.2.2 고정(3.3은 CPU 버그).
+  - `chunk.py`: 줄 단위 800자·겹침 150자, PDF는 쪽을 넘지 않음. **조각은 문서 찾기용** — LLM에게는 `get_document`로 본문 전체를 준다.
+  - `store.py`: 인호 스키마의 `source_document`(본문 전체·`raw_metadata`) + `document_chunk`(조각·bge-m3 `vector(1024)`·`metadata`). `ingest`(같은 source_name+record_key면 덮어씀, 해시 같으면 건너뜀) / `search`(코사인, 문서별로 묶음, `filters`는 `raw_metadata @>`, `min_score`) / `get_document`.
+  - `ingest.py`: 일괄 적재 CLI. `python -m engine.rag.ingest <파일|폴더> --doc-kind 교육과정 --department ... --year 2022 [--dry-run]` 또는 `--manifest`. 추출 본문은 `data/processed/<이름>.txt`.
+- `backend/app.py` — FastAPI(`uvicorn backend.app:app`). `POST /upload`(최대 5개·20MB, 본문을 바로 돌려줌. **학생 개인 자료라 공용 벡터 DB에 넣지 않는다**), `POST /rag/search`, `GET /rag/documents/{id}`.
 - **근거 풀 vs 근거 카드**: 근거 풀은 코드가 검색 결과를 전부 담는 원문 목록, 근거 카드는 LLM이 그중 근거만 골라 만든 것. "근거를 못 찾으면 넣지 않는다"는 카드 기준이다.
 - `engine/tools/text.py` — 태그/엔티티 정리, URL 정규화(티스토리 `/m/` 제거, 추적 파라미터 제거), 날짜를 `YYYYMMDD` 정수로.
 
