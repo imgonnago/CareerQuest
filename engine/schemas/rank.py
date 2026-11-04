@@ -60,6 +60,7 @@ class RankCard(BaseModel):
     deadline: int | None = Field(default=None, description="활동·공모전: 원문에서 찾은 마감일 YYYYMMDD")
     deadline_status: DeadlineStatus | None = None
     notes: list[str] = Field(default_factory=list, description="5단계 주의 사항 (학생 화면에 같이 보여 줌)")
+    schedule: list[str] = Field(default_factory=list, description="[67] 자격증·활동: 근거 인용·제목에 적힌 오늘 이후 날짜와 그 줄 (예: \"2026.11.22 — 제4회 ADsP 시험\")")
 
 
 IssueKind = Literal["판단 오류", "근거 부족", "주의"]
@@ -114,6 +115,7 @@ class GuideItem(BaseModel):
     deadline: int | None = None
     deadline_status: DeadlineStatus | None = None
     notes: list[str] = Field(default_factory=list)
+    schedule: list[str] = Field(default_factory=list, description="[67] 근거에 적힌 앞으로의 일정 (날짜 — 그 줄)")
     evidence: list[GuideEvidence]
 
 
@@ -125,8 +127,10 @@ class GuideSection(BaseModel):
 class GuideResult(BaseModel):
     """학생에게 보여 줄 최종 답변. [64] answer(대화형 글) + sources(글에 나온 근거 번호의 출처)가 채팅 화면용,
     sections는 같은 내용의 카드·링크 화면용 (markdown은 확인용)."""
+    kind: Literal["취업 가이드", "정보 질문", "진로 고민"] = Field(default="취업 가이드", description="[66] 입력 판단 경로")
+    crisis: bool = Field(default=False, description="[66] 위기 표현이 있어 위기 상담 안내를 붙임")
     job_title: str
-    answer: str = Field(default="", description="[64] 학생 질문에 상담하듯 답하는 대화형 글 (마크다운, 근거 번호 [C번호])")
+    answer: str = Field(default="", description="[64] 학생 질문에 상담하듯 답하는 대화형 글 (마크다운, 근거 번호 [C번호], 정보 질문은 [S번호])")
     sources: list[GuideEvidence] = Field(default_factory=list, description="[64] answer에 나온 [C번호]의 출처 (나온 순)")
     answer_by_code: bool = Field(default=False, description="[64] 대화형 답변이 두 번 다 검사에 걸려 코드가 만든 글로 바꿈")
     answer_issues: list[str] = Field(default_factory=list, description="[64] 대화형 답변 검사에서 걸린 것 (다시 쓰기 전 포함)")

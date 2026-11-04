@@ -34,6 +34,8 @@ WINDOW_BEFORE, WINDOW_AFTER = 2, 8   # 활동 이름이 나온 줄 앞뒤로 날
 OLD_DOC_DAYS = 365           # 마감일을 못 찾았을 때 이보다 오래된 문서면 notes에 적음
 # [63] 끝난 행사 기사("10월 10일 … 성료", "개최했다") — 인용의 날짜가 모두 지났으면 지난 회차
 PAST_EVENT = re.compile(r"성료|마쳤|폐막|시상식|수상|열렸|개최했|진행했|모집했")
+# [67] 날짜가 없을 때는 확실히 끝났다는 말만 (일반 조언 글의 "수상·진행했"에 걸려 "데이터 분석 공모전 참여"가 지난 회차로 빠짐)
+ENDED_FOR_SURE = re.compile(r"성료|폐막|마쳤|마무리|시상식|지난\s*\d{1,2}\s*일[^.]{0,80}(개최|열렸|열린|진행)")
 # [63] 참가 대상이 초·중·고등학생뿐인 활동 (대학생이 못 나감). "고등학생 이상"·"대학생"·"일반"이 있으면 괜찮음
 SCHOOL_ONLY = re.compile(r"(초등학생|중학생|고등학생|청소년)")
 OPEN_TO_ALL = re.compile(r"대학생|대학\s*\(?원\)?생|일반인?|누구나|전\s*국민|성인|고등학생\s*이상|제한\s*없")
@@ -163,14 +165,14 @@ def _dates(line: str, year_hint: int) -> list[int]:
 def find_deadline(names: list[str], text: str, published_at: int | None, single: bool) -> int | None:
     """활동 이름이 나온 줄 근처(앞 WINDOW_BEFORE·뒤 WINDOW_AFTER줄)에서 접수·마감 줄의 가장 늦은 날짜.
 
-    이름이 본문에 없고 문서가 이 활동 하나만 다루면(single) 문서 전체의 접수·마감 줄에서 찾는다."""
+    문서가 이 활동 하나만 다루면(single) 이름 위치와 상관없이 문서 전체의 접수·마감 줄에서 찾는다 ([67])."""
     lines = text.splitlines()
     keys = [_norm(n).lower() for n in names if len(_norm(n)) >= 2]
     hits = [i for i, ln in enumerate(lines) if any(k in _norm(ln).lower() for k in keys)]
-    if hits:
-        idx = sorted({j for i in hits for j in range(max(0, i - WINDOW_BEFORE), min(len(lines), i + WINDOW_AFTER + 1))})
-    elif single:
+    if single:  # [67] 활동 하나만 다루는 글은 문서 전체 (이름은 1~13줄, 마감일은 24줄이라 창 밖이던 공모전 공고)
         idx = range(len(lines))
+    elif hits:
+        idx = sorted({j for i in hits for j in range(max(0, i - WINDOW_BEFORE), min(len(lines), i + WINDOW_AFTER + 1))})
     else:
         return None
     year = published_at // 10000 if published_at else None
@@ -199,7 +201,9 @@ def _activity_deadline(rank: RankCard, agg: AggregationResult, cards: dict, toda
             d = find_deadline(names, text, doc.published_at, single=n_acts <= 1)
         if d is None and PAST_EVENT.search(quotes + doc.title):
             dates = _dates(quotes + " " + doc.title, year)
-            ended = ended or (bool(dates) and max(dates) < today)
+            # [67] 날짜가 없는 결과 기사("…논문경진대회 성료", "지난 3일 … 개최했다")는 작성일이 오늘보다 앞이면 끝난 행사
+            ended = ended or (max(dates) < today if dates else bool(
+                ENDED_FOR_SURE.search(quotes + " " + doc.title) and doc.published_at and doc.published_at < today))
         if d and (best is None or d > best):
             best = d
         if doc.published_at and (newest is None or doc.published_at > newest):
@@ -238,6 +242,58 @@ def is_event(r: RankCard, cards: dict) -> bool:
     if r.slot in REQUIREMENT_SLOTS:
         return False
     return any(EVENT_WORD.search(t) for t in (r.skill, *[cards[c].item for c in r.card_ids if c in cards]))
+
+
+SCHEDULE_MAX = 3          # [67] 순위 카드마다 붙일 일정 수
+SCHEDULE_CONTEXT = 60     # 일정 줄 길이 (날짜 앞뒤 글자 수)
+
+
+SCHEDULE_WORD = re.compile(r"시험|접수|원서|필기|실기|회차|제\s*\d+\s*회|일정|마감|기간|발표|모집|신청|개최|본선|예선")
+
+
+def _clip(line: str) -> str:
+    line = " ".join(line.split())
+    return line if len(line) <= SCHEDULE_CONTEXT * 2 else line[:SCHEDULE_CONTEXT * 2] + "…"
+
+
+def upcoming_dates(r: RankCard, agg: AggregationResult, cards: dict, today: int) -> list[str]:
+    """[67] 시험·접수·대회 일정: 오늘 이후 날짜와 그 줄 (답변 LLM은 이 목록의 날짜만 씀).
+
+    인용·출처 제목의 날짜 → 본문에서 이름이 나온 줄 근처(앞 WINDOW_BEFORE·뒤 WINDOW_AFTER줄, 제목에 이름이 있으면 문서 전체)의
+    일정 말(시험·접수·원서·마감 …)이 있는 줄. 인용에는 설명 문장만 들어가는 일이 많아 본문도 본다 (코드가 날짜만 찾음 — LLM 입력을 자르는 것이 아님).
+    활동은 앞에서 찾은 마감일(deadline)도 넣는다."""
+    docs = {d.doc_id: d for d in agg.docs}
+    names = [n for n in dict.fromkeys([r.skill, *[cards[c].item for c in r.card_ids if c in cards]]) if len(_norm(n)) >= 2]
+    keys = [_norm(n).lower() for n in names]
+    out: dict[int, str] = {}
+    if r.deadline and r.deadline >= today:
+        out[r.deadline] = "접수 마감"
+
+    def take(line: str, year: int | None, need_word: bool) -> None:
+        if need_word and not SCHEDULE_WORD.search(line):
+            return
+        for d in _dates(line, year):
+            if d >= today and d not in out:
+                out[d] = _clip(line)
+
+    for doc_id in dict.fromkeys(cards[c].doc_id for c in r.card_ids if c in cards):
+        doc = docs.get(doc_id)
+        if doc is None:
+            continue
+        year = doc.published_at // 10000 if doc.published_at else None
+        quotes = [cards[c].quote for c in r.card_ids if c in cards and cards[c].doc_id == doc_id]
+        for line in re.split(r"\n|(?<=[.!?])\s+", "\n".join([doc.title, *quotes])):
+            take(line, year, need_word=False)
+        text = agg.texts.get(doc_id)
+        if not text:
+            continue
+        lines = text.splitlines()
+        whole = any(k in _norm(doc.title).lower() for k in keys)
+        hits = range(len(lines)) if whole else sorted({j for i, ln in enumerate(lines) if any(k in _norm(ln).lower() for k in keys)
+                                                     for j in range(max(0, i - WINDOW_BEFORE), min(len(lines), i + WINDOW_AFTER + 1))})
+        for j in hits:
+            take(lines[j], year, need_word=True)
+    return [f"{d // 10000}.{d // 100 % 100}.{d % 100} — {ctx}" for d, ctx in sorted(out.items())[:SCHEDULE_MAX]]
 
 
 def check_ranks(ranks: list[RankCard], agg: AggregationResult,
@@ -292,6 +348,8 @@ def check_ranks(ranks: list[RankCard], agg: AggregationResult,
                 issues.append(RankIssue(slot=r.slot, kind="주의", message=f"{r.skill}: 마감된 회차라 추천에서 빼고 참고로 남김"))
                 past.append(r)
                 continue
+        if r.slot == "자격증" or is_event(r, cards):  # [67] 시험·접수·대회 일정
+            r.schedule = upcoming_dates(r, agg, cards, today)
         out.append(r)
     # 슬롯 순서는 그대로, 순위 다시 매김
     by_slot: dict[str, list[RankCard]] = {}

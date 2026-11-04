@@ -73,7 +73,7 @@ def to_item(r: RankCard, agg: AggregationResult) -> GuideItem:
     return GuideItem(
         rank=r.rank, title=title, skill=r.skill, gap=r.gap, action=r.action, reason=r.reason, kind=kind,
         grade=r.grade, course_type=r.course_type, deadline=r.deadline, deadline_status=r.deadline_status,
-        notes=r.notes, evidence=pick_evidence(r, cards, docs, agg.doc_roles),
+        notes=r.notes, schedule=r.schedule, evidence=pick_evidence(r, cards, docs, agg.doc_roles),
     )
 
 
@@ -117,6 +117,8 @@ def render_answer_input(sections: list[GuideSection]) -> str:
             lines.append(f"- {it.title} ({it.gap}{', ' + ', '.join(extra) if extra else ''})")
             lines.append(f"  할 일: {it.action}")
             lines.append(f"  이유: {it.reason}")
+            for d in it.schedule:
+                lines.append(f"  일정: {d}")
             for n in it.notes:
                 lines.append(f"  주의: {n}")
             for e in it.evidence[:SUMMARY_QUOTES]:
@@ -129,6 +131,8 @@ def _mentioned(it: GuideItem, text: str) -> bool:
     return any(re.sub(r"\s+", "", n).lower() in t for n in (it.title, it.skill) if n)
 
 
+# [67] 프롬프트 문구를 그대로 옮긴 반말 끝맺음 ("다음 모집을 확인해 보라.")
+BANMAL = re.compile(r"(보라|하라|해라|봐라|할 것|볼 것)(?=\s*(\[[CS]\d+\])*\s*([.!]|$))", re.M)
 # [65] 지난 회차를 할 일로 권하는 문장 ("○○에 참여하세요") — 같은 문장에 지난·마감·다음 모집 같은 말이 없으면 문제
 RECOMMEND_VERB = re.compile(r"참여|참가|지원|출전|신청|도전|준비")
 PAST_WORD = re.compile(r"지난|마감|끝난|다음\s*(모집|회차|해|번)|열렸|있었|참고")
@@ -161,6 +165,19 @@ def check_answer(text: str, sections: list[GuideSection], agg: AggregationResult
     foreign = [c for c in _companies(agg) if c in text and c not in listed]
     if foreign:
         issues.append(f"추천 목록에 없는 기업을 씀: {', '.join(foreign)}")
+    if "○○" in text or "OO" in text:  # [67] 예시의 자리표시자를 그대로 옮김
+        issues.append("자리표시자(○○)를 그대로 씀 — 실제 이름으로 쓸 것")
+    if m := BANMAL.search(text):
+        issues.append(f"반말·지시문 끝맺음이 있음: \"…{text[max(0, m.start() - 20):m.end()]}\" — 존댓말(~해 보세요)로 쓸 것")
+    # [67] 일정 목록에 없는 날짜 (오늘 이후 날짜만 — 지난 날짜는 past_terms가 봄)
+    allowed = {re.sub(r"\s", "", d.split(" — ")[0]) for it in [*items, *past] for d in it.schedule}
+    allowed |= {f"{it.deadline // 10000}.{it.deadline // 100 % 100}.{it.deadline % 100}" for it in [*items, *past] if it.deadline}
+    from engine.pipeline.stage5_verify import FULL_DATE
+    odd = [m.group(0) for m in FULL_DATE.finditer(text)
+           if f"{int(m.group(1))}.{int(m.group(2))}.{int(m.group(3))}" not in allowed
+           and int(m.group(1)) * 10000 + int(m.group(2)) * 100 + int(m.group(3)) >= today]
+    if odd:
+        issues.append(f"일정 목록에 없는 날짜를 씀: {', '.join(odd[:3])} — 날짜는 목록의 '일정'에 있는 것만")
     # [65] 지난 회차를 할 일로 권함
     for it in past:
         for sent in re.split(r"(?<=[.!?。])\s+|\n", text):
@@ -287,6 +304,8 @@ def render_markdown(guide: GuideResult) -> str:
             lines.append(f"{it.rank}. **{name}** ({it.gap}{', ' + ', '.join(extra) if extra else ''})")
             lines.append(f"   - 할 일: {it.action}")
             lines.append(f"   - 이유: {it.reason}")
+            for d in it.schedule:
+                lines.append(f"   - 일정: {d}")
             for n in it.notes:
                 lines.append(f"   - 주의: {n}")
             for e in it.evidence:
