@@ -1,6 +1,6 @@
 """1단계(목표 직무 설정) 입출력 스키마.
 
-- StudentInput: 학생 입력. 프론트(재열)와 형식 합의 전 임시 — README 화면 항목 기준
+- StudentInput: 학생 입력. 프론트(재열)와 형식 합의 전 임시 — README 화면 항목 기준. documents = 업로드 문서 본문 ([48])
 - TargetJobDraft: LLM이 JSON으로 출력하는 형식
 - TargetJob: 코드가 검증을 거쳐 2단계로 넘기는 결과
 - InterestCheck: 관심 분야 확인 LLM 출력 (관심 / 경험)
@@ -9,6 +9,12 @@
 from typing import Annotated, Literal
 
 from pydantic import BaseModel, Field, StringConstraints
+
+
+class UploadedDoc(BaseModel):
+    """[48] 학생이 올린 파일(이력서·포트폴리오·활동 기록)에서 POST /upload가 뽑은 본문. 1단계가 보유 항목을 찾을 때 읽는다."""
+    filename: str
+    text: str
 
 
 class StudentInput(BaseModel):
@@ -20,6 +26,8 @@ class StudentInput(BaseModel):
     projects: list[str] = Field(default_factory=list, description="진행한 프로젝트")
     activities: list[str] = Field(default_factory=list, description="참여한 비교과 활동")
     question: str | None = Field(default=None, description="학생이 자유롭게 쓴 질문·고민")
+    # [48] 업로드 본문. 학생 개인 자료라 1단계만 읽고 공용 벡터 DB·2단계 검색어에는 넣지 않는다
+    documents: list[UploadedDoc] = Field(default_factory=list, description="업로드 문서 본문 (POST /upload 결과의 filename·text)")
 
 
 class Interest(BaseModel):

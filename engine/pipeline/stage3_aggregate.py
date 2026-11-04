@@ -418,5 +418,5 @@ def aggregate_evidence(ext: ExtractionResult, skill_dict: list[SkillEntry] | Non
     skills = build_table(cards, roles)
     return AggregationResult(
         job=ext.job, docs=ext.docs, cards=cards, doc_roles=roles, skills=skills, skill_dict_loaded=bool(skill_dict),
-        duplicates=duplicates, timings={k: round(v, 1) for k, v in timings.items()},
+        duplicates=duplicates, timings={k: round(v, 1) for k, v in timings.items()}, texts=ext.texts,
     )

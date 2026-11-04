@@ -116,3 +116,5 @@ class AggregationResult(BaseModel):
     skill_dict_loaded: bool = Field(description="DB Skill 사전을 읽었는지. False면 모든 skill_id가 null")
     duplicates: int = Field(description="(doc_id, quote)가 같아 지운 카드 수")
     timings: dict[str, float]
+    texts: dict[str, str] = Field(default_factory=dict, exclude=True,
+                                  description="5단계 검증용 본문 (2단계 ExtractionResult.texts 그대로). JSON 출력에는 안 넣음")

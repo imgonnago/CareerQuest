@@ -443,6 +443,9 @@ class ExtractionResult(BaseModel):
     to_school: int = Field(default=0, description="[59] 건양대 문서의 대외활동 카드 중 item·quote에 \"건양대\"가 있어 교내프로그램으로 고친 수")
     rounds: list["RoundLog"] = Field(default_factory=list, description="추출 루프 바퀴별 기록")
     timings: dict[str, float] = Field(description="단계별 소요 시간(초, 바퀴 합계)")
+    # 5단계 검증(마감일 확인)용 본문. 근거 풀 항목(EvidenceDoc)에는 본문을 넣지 않는 규칙이라 따로 둔다.
+    # 카드가 나온 문서만 담고, JSON 출력(model_dump)에는 넣지 않는다
+    texts: dict[str, str] = Field(default_factory=dict, exclude=True, description="doc_id → 본문 (카드가 나온 문서만)")
 
 
 class RoundLog(BaseModel):
@@ -786,4 +789,5 @@ def extract_evidence(job: TargetJob, log=print, use_rag: bool = True) -> Extract
         rag_error=rag.error,
         slots=fill_counts(slot_docs(cards)),
         timings={k: round(v, 1) for k, v in timings.items()},
+        texts={d: t for d, t in pool.texts.items() if d in {c.doc_id for c in cards}},
     )
