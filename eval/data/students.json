@@ -1,0 +1,29 @@
+[
+  {
+    "id": "data_analyst_y2",
+    "student": {
+      "question": "컴퓨터공학과 2학년이에요. 데이터 분석가가 되고 싶은데 파이썬이랑 SQL은 조금 할 줄 알고 자격증은 아직 없어요. 공모전도 나가 보고 싶은데 뭐부터 준비하면 좋을까요?"
+    }
+  },
+  {
+    "id": "backend_y3",
+    "student": {
+      "major": "컴퓨터공학과",
+      "grade": 3,
+      "desired_job": "백엔드 개발자",
+      "skills": ["Java", "Git"],
+      "projects": ["Spring 게시판 웹 서비스"],
+      "question": "내년에 백엔드 신입으로 취업하려면 남은 기간에 무엇을 먼저 해야 할까요?"
+    }
+  },
+  {
+    "id": "medical_ai_y1",
+    "student": {
+      "major": "의료인공지능학과",
+      "grade": 1,
+      "desired_job": "의료 AI 엔지니어",
+      "skills": ["Python"],
+      "question": "병원 데이터를 다루는 AI 엔지니어가 되고 싶어요. 1학년 때부터 어떤 과목과 활동을 챙기면 좋을까요?"
+    }
+  }
+]
