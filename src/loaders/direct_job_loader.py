@@ -1,5 +1,5 @@
 from __future__ import annotations
-
+from datetime import datetime, timezone
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -87,6 +87,11 @@ def upsert_official_job_record(
     application_start = parse_iso_datetime(record.get("application_start"))
     deadline = parse_iso_datetime(record.get("deadline"))
 
+    is_current = (
+        deadline is not None
+        and deadline >= datetime.now(timezone.utc)
+    )
+
     resource = session.scalar(
         select(Resource).where(Resource.dedup_key == dedup_key)
     )
@@ -104,7 +109,7 @@ def upsert_official_job_record(
             published_at=published_at,
             available_from=application_start,
             expires_at=deadline,
-            is_active=True,
+            is_active=is_current,
         )
         session.add(resource)
         session.flush()
@@ -120,7 +125,7 @@ def upsert_official_job_record(
         )
         resource.canonical_url = canonical_url
         resource.last_seen_at = utc_now()
-        resource.is_active = True
+        resource.is_active = is_current
 
         if published_at:
             resource.published_at = published_at

@@ -1907,7 +1907,7 @@ JOB_DETAIL_SQL = text(
         :parse_status,
 
         CASE
-            WHEN :parse_status = 'PARSED'
+            WHEN CAST(:parse_status AS VARCHAR(50)) = 'PARSED'
             THEN NOW()
             ELSE NULL
         END

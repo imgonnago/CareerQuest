@@ -690,86 +690,93 @@ def parse_list_page(
     )
 
 
+
 def crawl_list(
     session: requests.Session,
 ) -> list[RecruitItem]:
 
-    all_items: dict[
-        str,
-        RecruitItem,
-    ] = {}
+    all_items: dict[str, RecruitItem] = {}
 
-    total_pages: (
-        int | None
-    ) = None
+    # 2Y: 접수 가능
+    # 2N: 접수 마감
+    status_groups = (
+        ("2Y", "접수 가능"),
+        ("2N", "접수 마감"),
+    )
 
-    for page_index in range(
-        1,
-        MAX_PAGES + 1,
-    ):
-
-        response = fetch(
-            session,
-            LIST_URL,
-            params={
-                "pageIndex": (
-                    page_index
-                ),
-            },
-        )
-
-        items, (
-            detected_total_pages
-        ) = parse_list_page(
-            response.text,
-            response.url,
-        )
-
-        if total_pages is None:
-
-            total_pages = (
-                detected_total_pages
-            )
+    for status_code, status_label in status_groups:
 
         print(
-            f"[목록] "
-            f"page={page_index} "
-            f"→ {len(items)}건"
+            f"\n[{status_label} 채용공고 수집]"
         )
 
-        new_count = 0
+        total_pages = None
 
-        for item in items:
+        for page_index in range(
+            1,
+            MAX_PAGES + 1,
+        ):
+
+            response = fetch(
+                session,
+                LIST_URL,
+                params={
+                    "pageIndex": page_index,
+                    "searchOtptSttus": status_code,
+                },
+            )
+
+            items, detected_total_pages = (
+                parse_list_page(
+                    response.text,
+                    response.url,
+                )
+            )
+
+            if total_pages is None:
+                total_pages = detected_total_pages
+
+            print(
+                f"  [{status_label}] "
+                f"page={page_index} "
+                f"→ {len(items)}건"
+            )
+
+            if not items:
+                if page_index == 1:
+                    raise RuntimeError(
+                        f"{status_label} 첫 페이지에서 "
+                        "채용공고를 찾지 못했습니다."
+                    )
+                break
+
+            new_count = 0
+
+            for item in items:
+                if item.notice_id not in all_items:
+                    new_count += 1
+
+                all_items[item.notice_id] = item
 
             if (
-                item.notice_id
-                not in all_items
+                total_pages is not None
+                and page_index >= total_pages
             ):
-                new_count += 1
+                break
 
-            all_items[
-                item.notice_id
-            ] = item
+            if (
+                total_pages is None
+                and new_count == 0
+            ):
+                break
 
-        if (
-            total_pages
-            is not None
-            and page_index
-            >= total_pages
-        ):
-            break
-
-        if (
-            total_pages
-            is None
-            and page_index > 1
-            and new_count == 0
-        ):
-            break
-
-    return list(
-        all_items.values()
+    print(
+        "\n[건양대병원 총 고유 공고] "
+        f"{len(all_items)}건"
     )
+
+    return list(all_items.values())
+
 
 
 def extract_fulltext(
