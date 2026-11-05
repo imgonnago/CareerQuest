@@ -19,13 +19,16 @@ cp .env.example .env   # NAVER_CLIENT_ID / NAVER_CLIENT_SECRET / KAKAO_REST_API_
 ```
 
 - DB: `docker compose up -d` → `alembic upgrade head`. pgvector 확장은 마이그레이션이 만든다.
+- 평가: `python -m eval.agent_eval --suite students|truthfulqa|all --repeats N --limit M` (파이프라인 전체를 for 문으로, 결과는 `eval/results/`, [68]). 평가 전에 DB를 켤 것 — 꺼져 있으면 RAG·Skill 사전 없이 돈다. TruthfulQA 판정은 Claude Opus 5.5가 Claude Code에서 `truthfulqa_review.jsonl`을 읽고 `judgments.jsonl`에 써서 `--score`로 집계한다(평가 전용, 서비스 실행은 외부 LLM 없음). `verdict`는 참조 목록 기준, `fabricated`(지어낸 내용)는 판정자 지식 기준.
 - 빌드·린트·테스트 설정은 아직 없다. 모듈은 저장소 루트에서 `python -c "from engine.tools.kakao import search_kakao; ..."`처럼 `engine.` 절대 import로 실행한다.
 - API 키는 `engine.config.require("KEY")`로 읽는다 (없으면 RuntimeError).
 - `docs/samples/*.json`은 각 검색 API·본문 수집 결과의 실제 샘플이다. API를 호출하지 않고 형태를 확인할 때 쓴다.
 
 ## 엔진 아키텍처
 
-맨 앞에 [66] **0단계 입력 판단**(`engine/pipeline/stage0_route.py`)이 있다: 위기 표현은 코드 정규식(`CRISIS`)이 먼저 → 진로 고민 + 위기 상담 안내(109 등)를 코드가 반드시 붙임. 나머지는 입력 판단 LLM이 취업 가이드 / 정보 질문 / 진로 고민 + `has_goal`. 취업 가이드는 아래 1~5단계(목표가 하나도 없으면 1단계 전에 되묻기 `clarify_answer`), 정보 질문은 `answer_info`(검색어 → RAG → 검색 API → 선택 → 본문 → 답변 [S번호]), 진로 고민은 `answer_counsel`(검색 없음). 어느 경로든 `GuideResult.answer`·`sources`·`kind`.
+맨 앞에 [66] **0단계 입력 판단**(`engine/pipeline/stage0_route.py`)이 있다. 순서: 위기 판단(`check_crisis`, [70] LLM 주도, 명백한 표현은 `CRISIS_CERTAIN` 안전망, LLM 실패 시 `CRISIS_FALLBACK`) → [71] 대화 정리(`resolve_history`) → 후속 판단(`check_followup`) → 입력 판단 LLM(취업 가이드 / 정보 질문 / 진로 고민 / 일반 대화 + `has_goal`) → 위기 안내 뒤 흐름 유지(`keep_crisis`). 취업 가이드는 아래 1~5단계(목표가 없으면 되묻기 `clarify_answer`, LLM이 쓰고 실패 시 고정 문구), 정보 질문은 `answer_info`(검색어 → RAG → 검색 API → 선택 → 본문 → 답변 [S번호], 자료 없으면 `no_docs_answer`), 진로 고민은 `answer_counsel`(검색 없음), 후속 질문은 `answer_followup`(이전 추천·근거만 읽음, 검색 안 함), 일반 대화는 `answer_chat`(인사·개념 설명·코드·글 다듬기, [72] 도구 없이 모델이 바로 답함, 출처 없음). **위기 답변(`crisis_answer`)은 코드가 가진 문장만 나간다**: LLM은 공감 문장을 고르기만 하고 안전 확인·상담 번호는 고정. LLM이 쓰면 위험한 문장이 검사를 빠져나갔다([70][71]). 어느 경로든 `GuideResult.answer`·`sources`·`kind`.
+
+채팅([71]): 대화는 서버에 저장하지 않고 프론트가 `/analyze`의 `history`(`engine/schemas/chat.py`의 `ChatTurn`, assistant 차례에 받은 `guide` 그대로)로 매번 보낸다. `student.question`이 지금 메시지.
 
 README의 5단계 파이프라인: (1) 목표 직무 설정 → (2) 근거 추출(LLM ↔ 도구 루프) → (3) 근거 집계 → (4) 우선순위 판단 → (5) 검증(코드). 역할 분담 원칙: **LLM은 도구 선택·문서 읽기·판단, 코드는 도구 실행·저장·세기·검증**(8B 모델 약점 보완).
 
@@ -73,6 +76,7 @@ README의 5단계 파이프라인: (1) 목표 직무 설정 → (2) 근거 추�
 - **남은 2단계 문제**(problem.txt [58]~[61]): 포트폴리오에 교육 과정(아카데미·부트캠프)이 섞임(사용자: 포트폴리오로 볼 수도 있어 애매 — 보류), 이름이 불분명한 활동("특강"), 백엔드 학생에게 의료 AI 과목이 붙음, 읽기 출력 잘림([36])이 한 바퀴를 150초로 늘리는 경우.
 - **합의된 것**: 3단계 Skill 사전에 없는 항목은 지우지 않고 `SkillRow.mapping` = "매핑되지 않음", 인호 `src/gap_service.py`도 `skill_id` null 줄을 `gap: "매핑되지 않음"`으로 돌려줌([49]). 인호 파일을 고쳤으니 인호에게 공유할 것.
 - **인호와 정할 것**: `engine/rag/index.py`의 `doc_kind_of` 대응표(인호 resource_type·document_type → doc_kind, [53]), index 실행 시점(로더 끝에서 부를지), Skill 사전에 어학 Skill·별칭 추가(자격증은 3단계에서 정확히 같을 때만 매핑).
+- **채팅 전환([71])**: 엔진·API는 `history`로 이어짐. 프론트 연결은 재열과 맞출 것. 위기 판단·문구는 상담 전문가 검토 전이다.
 - **API 서버**: `backend/app.py` 하나로 합침([50] 일부 해결). 남은 것: 프론트 입력을 DB `student`에 저장하는 API(지금은 student_id를 알 때만 인호 Gap, 없으면 1단계 보유 항목으로 판단 — 프론트 입력·저장 형식은 인호·재열이 정함, 용재 쪽은 정해지면 `student_id`만 받아 쓰면 됨), 업로드 문서를 공용 RAG에 넣을지(지금은 1단계만 읽음).
 - **4·5단계 남은 것**([62]·[63]): 실제 입력 시험에서 "기업 주최 공모전" 같은 학생 조건이 활동 추천에 반영 안 됨, 희망 직무 칸이 비면 직무명이 일반적("AI Engineer"). "근거 부족 → (2)" 재추출 없음, 모델 순위 vs 빈도 순위(`freq_rank`) 비교 실험 안 함, 후보 질은 2·3단계 그대로(채용 요건에 엉뚱한 매핑·기사). 시험 DB의 Skill 사전(`python -m src.db.seed_master`)이 작아 집계 줄의 70% 넘게 "매핑되지 않음".
 - **시험 데이터**: 실험은 conda 별도 환경 `cq-pgtest`(PostgreSQL 16 + pgvector)의 시험 DB(포트 55432, `careerquest_test`, 사용자 `cqtest`)로 함. 내용은 의료인공지능학과 교육과정 PDF 1건 + 인호 로더 형식 시험 행 8건(비교과·지역 프로그램 각 1건)뿐이라 활동 슬롯 수치는 실제 데이터로 다시 재야 함. 켜는 법: `~/miniconda3/envs/cq-pgtest/bin/initdb -D <dir> -U cqtest --auth=trust` → `pg_ctl -D <dir> -o "-p 55432 -k ''" start` → `createdb -h localhost -p 55432 -U cqtest careerquest_test` → `POSTGRES_DB=careerquest_test POSTGRES_USER=cqtest POSTGRES_PASSWORD=cqtest POSTGRES_PORT=55432 alembic upgrade head` (환경 변수가 .env보다 우선). Skill 사전·직무 목록은 `python -m src.db.seed_master`, 교육과정은 `python -m engine.rag.ingest "data/raw/…pdf" --doc-kind 교육과정 --department 의료인공지능학과 --year 2022`. 측정 스크립트(학생 3명, 시간 상한 없이 6바퀴)는 저장소에 없음.

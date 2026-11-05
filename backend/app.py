@@ -6,6 +6,7 @@
 엔드포인트 (용재)
 - POST /analyze         분석 시작 (1~5단계 + 결과 생성, 3~5분). 바로 job_id를 돌려주고 뒤에서 돈다
                         본문: {"student": StudentInput, "student_id": DB 학생 번호(있으면 인호 Gap API로 보유 판단)}
+                        [71] 채팅: "history"에 이전 대화 [{"role","content","guide"}], student.question에 지금 메시지. 대화는 프론트가 보관해 매번 보낸다
                         업로드 문서는 POST /upload 결과의 filename·text를 student.documents에 넣어 보낸다 ([48])
 - GET  /analyze/{job_id}  진행 상황(단계·로그·대기 순번)과 끝나면 결과. ?detail=true면 근거 풀·카드·집계 표·검증 기록까지
 - POST /upload          학생이 올린 파일(이력서·포트폴리오·활동 기록)에서 본문을 바로 뽑아 돌려줌 (실시간)
@@ -33,6 +34,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
 from engine.rag.extract import SUPPORTED_EXT, UnsupportedFile, extract
+from engine.schemas.chat import ChatTurn
 from engine.schemas.job import StudentInput
 
 log = logging.getLogger(__name__)
@@ -100,6 +102,7 @@ class AnalyzeRequest(BaseModel):
     student: StudentInput
     student_id: int | None = Field(default=None, gt=0, description="DB student_id. 있으면 인호 Gap API(student_skill)로 보유 판단")
     use_rag: bool = True
+    history: list[ChatTurn] = Field(default_factory=list, description="[71] 이전 대화 (지금 메시지 제외, 오래된 순). assistant 차례에는 받은 guide를 그대로")
 
 
 class AnalyzeStatus(BaseModel):
@@ -146,7 +149,7 @@ def _run_job(job: _Job) -> None:
         job.messages = (job.messages + [msg])[-MAX_MESSAGES:]
 
     try:
-        job.result = run_pipeline(job.req.student, student_id=job.req.student_id, use_rag=job.req.use_rag,
+        job.result = run_pipeline(job.req.student, student_id=job.req.student_id, use_rag=job.req.use_rag, history=job.req.history,
                                   progress=progress, log=lambda m: log.info("[%s] %s", job.id, m))
         job.status = "완료"
     except Exception as e:

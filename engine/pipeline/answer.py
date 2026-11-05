@@ -165,7 +165,7 @@ def check_answer(text: str, sections: list[GuideSection], agg: AggregationResult
     foreign = [c for c in _companies(agg) if c in text and c not in listed]
     if foreign:
         issues.append(f"추천 목록에 없는 기업을 씀: {', '.join(foreign)}")
-    if "○○" in text or "OO" in text:  # [67] 예시의 자리표시자를 그대로 옮김
+    if "○○" in text or re.search(r"(?<![A-Za-z])OO(?![A-Za-z])", text):  # [67] 예시의 자리표시자를 그대로 옮김. [73] ROOKIE 같은 단어 안의 OO는 아님
         issues.append("자리표시자(○○)를 그대로 씀 — 실제 이름으로 쓸 것")
     if m := BANMAL.search(text):
         issues.append(f"반말·지시문 끝맺음이 있음: \"…{text[max(0, m.start() - 20):m.end()]}\" — 존댓말(~해 보세요)로 쓸 것")

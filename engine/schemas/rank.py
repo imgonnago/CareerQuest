@@ -127,7 +127,7 @@ class GuideSection(BaseModel):
 class GuideResult(BaseModel):
     """학생에게 보여 줄 최종 답변. [64] answer(대화형 글) + sources(글에 나온 근거 번호의 출처)가 채팅 화면용,
     sections는 같은 내용의 카드·링크 화면용 (markdown은 확인용)."""
-    kind: Literal["취업 가이드", "정보 질문", "진로 고민"] = Field(default="취업 가이드", description="[66] 입력 판단 경로")
+    kind: Literal["취업 가이드", "정보 질문", "진로 고민", "후속 질문", "일반 대화"] = Field(default="취업 가이드", description="[66][71][72] 입력 판단 경로")
     crisis: bool = Field(default=False, description="[66] 위기 표현이 있어 위기 상담 안내를 붙임")
     job_title: str
     answer: str = Field(default="", description="[64] 학생 질문에 상담하듯 답하는 대화형 글 (마크다운, 근거 번호 [C번호], 정보 질문은 [S번호])")
