@@ -133,6 +133,7 @@ class GuideResult(BaseModel):
     answer: str = Field(default="", description="[64] 학생 질문에 상담하듯 답하는 대화형 글 (마크다운, 근거 번호 [C번호], 정보 질문은 [S번호])")
     sources: list[GuideEvidence] = Field(default_factory=list, description="[64] answer에 나온 [C번호]의 출처 (나온 순)")
     answer_by_code: bool = Field(default=False, description="[64] 대화형 답변이 두 번 다 검사에 걸려 코드가 만든 글로 바꿈")
+    tool_calls: list[dict] = Field(default_factory=list, exclude=True, description="[75] 정보 질문에서 LLM이 부른 도구 순서 (평가·로그용, 프론트 JSON에는 안 나감)")
     answer_issues: list[str] = Field(default_factory=list, description="[64] 대화형 답변 검사에서 걸린 것 (다시 쓰기 전 포함)")
     summary: str = Field(description="총평 (대화형 답변의 첫 문단. 근거 번호 [C번호]는 evidence의 card_id)")
     sections: list[GuideSection]

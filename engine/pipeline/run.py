@@ -149,7 +149,8 @@ def _run_pipeline(student: StudentInput, student_id: int | None, catalog: list[s
     timings["answer"] = time.time() - t
     timings["total"] = sum(timings.values())
 
-    extraction = {"slots": ext.slots, "rounds": len(ext.rounds), "rag_error": ext.rag_error, "queries": len(ext.queries),
+    extraction = {"slots": ext.slots, "rounds": len(ext.rounds), "tool_calls": sum(len(r.tool_calls) for r in ext.rounds),
+                  "stops": {r.slot: r.stop for r in ext.rounds}, "rag_error": ext.rag_error, "queries": len(ext.queries),
                   "docs": len(ext.docs), "selected": ext.selected, "cards": len(ext.cards), "rejected": len(ext.rejected), "capped": ext.capped,
                   "timings": ext.timings}
     return PipelineResult(route=route, job=job, guide=guide, ranking=ranking, aggregation=agg, extraction=extraction,

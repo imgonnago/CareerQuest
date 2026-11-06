@@ -2,8 +2,8 @@
 
 - RouteDraft: 입력 판단 LLM 출력. 학생 입력을 취업 가이드 / 정보 질문 / 진로 고민 중 하나로
 - CrisisCheck: 위기 판단 LLM 출력 ([70])
+- AnswerReview: 정보 답변 검토 LLM 출력 ([78])
 - RouteDecision: 코드가 확정한 경로 (폼 칸만 있으면 LLM 없이 취업 가이드, 위기면 진로 고민 + crisis)
-- InfoPlan: 정보 질문의 검색어 (계획 LLM)
 """
 from typing import Literal
 
@@ -38,6 +38,13 @@ class FollowupCheck(BaseModel):
     followup: bool = Field(description="이전 답변 자료에 있는 추천·내용을 더 묻고, 자료 안에 답이 있으면 true")
 
 
+class AnswerReview(BaseModel):
+    """[78] 정보 답변 검토 LLM 출력. 질문·읽은 문서 제목·답만 보고 판단한다."""
+    # 칸 순서 = 출력 순서
+    reason: str = Field(description="판단 이유 한 문장")
+    verdict: Literal["답함", "없다고 말함", "다른 대상", "과정 설명"]
+
+
 class RouteDecision(BaseModel):
     kind: RouteKind
     reason: str
@@ -45,7 +52,3 @@ class RouteDecision(BaseModel):
     has_goal: bool = Field(default=True, description="학생이 직무·관심 분야·전공·기업 중 하나라도 말함. 취업 가이드인데 false면 1단계 전에 되묻는다")
     crisis: bool = Field(default=False, description="[70] 위기 판단 LLM 또는 명백한 표현 정규식이 위기로 봄 — 답변에 위기 상담 번호가 반드시 들어감")
     by_code: bool = Field(default=False, description="LLM 없이 코드가 정함 (폼 칸만 있음·명백한 위기 표현·LLM 실패)")
-
-
-class InfoPlan(BaseModel):
-    queries: list[str] = Field(description="검색어 1~3개. 2~5단어. 예: [\"정보처리기사 실기 일정\", \"정보처리기사 시험 일정 2027\"]")

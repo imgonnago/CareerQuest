@@ -4,15 +4,51 @@
 - 메시지를 그냥 입력한다. 전공·직무 같은 정보도 대화로 말하면 된다.
 - /new 새 대화, q 종료
 - 실행 중 Ctrl+C는 그 실행만 멈추고 입력으로 돌아간다 (그 메시지는 대화에 넣지 않음).
+- [74][75] LLM이 부르는 도구(search_rag·search_requirements·read_documents)를 실행 중에 바로 보여 준다.
+  도구는 취업 가이드 2단계와 정보 질문만 쓴다. 인사·개념 설명·진로 고민·후속 질문은 도구 없이 답한다.
+- DB가 꺼져 있으면 search_rag 없이 돈다 (시작할 때 상태를 알려 줌).
 """
 import argparse
+import re
 import readline  # noqa: F401 — input()에서 한글 지우기·방향키가 제대로 되게 함
 import traceback
+
+from sqlalchemy import text
 
 from engine.pipeline.answer import render_chat, render_markdown
 from engine.pipeline.run import run_pipeline
 from engine.schemas.chat import ChatTurn
 from engine.schemas.job import StudentInput
+
+# 진행 로그 중 도구 호출과 그 결과만 고른다 (--verbose면 전부 출력)
+TOOL_LOG = re.compile(
+    r"^=== \[|^\[[^\]]+\] (search_|읽기:|검색어 중복|에이전트 끝)|^카드 \d+장 중 통과|^읽기 출력이 잘림"
+    r"|^정보 질문 (search_|읽기)|^정보 답변 검토|^도구 호출 오류|^RAG 검색 실패|^시간 상한|^필수 슬롯")
+
+
+def rag_status() -> str:
+    """시작할 때 search_rag를 쓸 수 있는지 알려 준다."""
+    try:
+        from src.db.database import engine
+        with engine.connect() as conn:
+            docs = conn.execute(text("SELECT count(DISTINCT source_document_id) FROM document_chunk")).scalar()
+    except Exception as e:
+        return f"DB 연결 안 됨 — search_rag 없이 검색 API로만 진행 ({type(e).__name__})"
+    return f"DB 연결됨 — search_rag로 찾을 수 있는 문서 {docs}건"
+
+
+def show_tools(result) -> None:
+    """이번 답변에서 쓴 도구를 요약한다. 정보 질문은 실행 안 된 호출까지 호출 순서대로 보여 준다."""
+    calls = result.guide.tool_calls
+    if calls:
+        print(f"[도구 호출 {len(calls)}번]")
+        for c in calls:
+            print(f"  턴{c['turn']} {c['tool']}({c['args']}) → {c['result']}")
+    elif result.extraction:
+        e = result.extraction
+        print(f"[도구 호출 {e['tool_calls']}번, 슬롯별 종료: {e['stops']}]")
+    else:
+        print("[도구 호출 없음]")
 
 
 def show(result, cards: bool) -> None:
@@ -26,7 +62,8 @@ def show(result, cards: bool) -> None:
         e = result.extraction
         print(f"[근거: 문서 {e['docs']}건, 카드 {e['cards']}장, {e['rounds']}바퀴, 슬롯 {e['slots']}]")
         if e["rag_error"]:
-            print(f"[RAG 오류 — 검색 API로만 진행: {e['rag_error']}]")
+            print(f"[RAG 오류 — 검색 API로만 진행: {e['rag_error'].splitlines()[0]}]")
+    show_tools(result)
     g = result.guide
     if g.answer_by_code:
         print(f"[모델 답변 대신 코드 문구를 씀: {g.answer_issues}]")
@@ -40,11 +77,12 @@ def main() -> None:
     p.add_argument("--no-rag", action="store_true", help="RAG 없이 검색 API로만")
     p.add_argument("--student-id", type=int, help="DB student_id (있으면 인호 Gap으로 보유 판단)")
     p.add_argument("--out", help="마지막 결과 전체를 JSON으로 저장할 경로")
-    p.add_argument("--verbose", action="store_true", help="단계 이름만이 아니라 진행 로그를 모두 출력")
+    p.add_argument("--verbose", action="store_true", help="단계 이름·도구 호출만이 아니라 진행 로그를 모두 출력")
     a = p.parse_args()
 
     history: list[ChatTurn] = []
     print("CareerQuest 채팅입니다. 편하게 말씀해 주세요. (/new 새 대화, q 종료)")
+    print(f"[{'RAG 끔 (--no-rag) — 검색 API로만 진행' if a.no_rag else rag_status()}]")
     while True:
         try:
             message = input("\n나: ").strip()
@@ -67,9 +105,13 @@ def main() -> None:
                 shown.append(stage)
                 print(f"  … {stage}", flush=True)
 
+        def tool_log(msg: str) -> None:
+            if TOOL_LOG.search(msg):
+                print(f"    {msg.splitlines()[0]}", flush=True)  # DB 오류처럼 여러 줄인 로그는 첫 줄만
+
         try:
             result = run_pipeline(StudentInput(question=message), student_id=a.student_id, use_rag=not a.no_rag,
-                                  progress=progress, log=print if a.verbose else (lambda _: None), history=history)
+                                  progress=progress, log=print if a.verbose else tool_log, history=history)
         except KeyboardInterrupt:
             print("\n실행을 멈췄습니다.")
             continue

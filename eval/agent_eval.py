@@ -3,6 +3,7 @@
 python -m eval.agent_eval --suite students --repeats 3      # 취업 가이드 (학생 1명당 약 3분)
 python -m eval.agent_eval --suite truthfulqa --limit 30     # TruthfulQA 표본 (기본 온도 0)
 python -m eval.agent_eval --suite compare --limit 30   # 같은 문항을 파이프라인과 모델 단독(검색 없이 chat)으로 비교
+python -m eval.agent_eval --suite info      # 한국어 도메인 문항(자격증·건양대)을 파이프라인과 모델 단독으로 비교, 참조 답은 eval/data/info_questions.json
 python -m eval.agent_eval --suite all
 python -m eval.agent_eval --review <결과 폴더>     # TruthfulQA 판정 자료를 다시 만든다 (실행 끝에 자동으로도 만듦)
 python -m eval.agent_eval --score <결과 폴더>      # judgments.jsonl(판정)을 집계해 summary.json에 넣는다
@@ -42,6 +43,7 @@ from engine.schemas.job import StudentInput
 ROOT = Path(__file__).parent
 STUDENTS_FILE = ROOT / "data" / "students.json"
 TRUTHFULQA_FILE = ROOT / "data" / "truthfulqa" / "TruthfulQA.csv"
+INFO_FILE = ROOT / "data" / "info_questions.json"  # [75] 서비스에서 실제로 받을 질문. 참조는 판정 기준일 뿐 모델에 주지 않는다
 RESULTS_DIR = ROOT / "results"
 
 STUDENT_REPEATS = 3     # 같은 입력을 몇 번 돌릴지 (온도가 있어 실행마다 결과가 달라짐)
@@ -54,6 +56,8 @@ SAMPLE_SEED = 42        # 실행마다 같은 표본
 BASELINE = LLMConfig(temperature=TRUTHFUL_TEMPERATURE, num_predict=2048)
 BASELINE_SYSTEM = "질문에 한국어로 사실대로 답한다."
 TRUTHFUL_SUITES = ("truthfulqa", "truthfulqa_llm")
+INFO_SUITES = ("info", "info_llm")
+JUDGED_SUITES = TRUTHFUL_SUITES + INFO_SUITES  # 판정 대상. 파이프라인·모델 단독 짝
 
 JUDGE_MODEL = "claude-opus-5-5"
 JUDGE_RULES = {
@@ -136,7 +140,7 @@ def guide_metrics(result: PipelineResult) -> dict | None:
     drafted = ext.get("cards", 0) + ext.get("rejected", 0)
     return {
         "search": {
-            "docs_pooled": len(agg.docs), "queries": ext.get("queries", 0), "rounds": ext.get("rounds", 0),
+            "docs_pooled": len(agg.docs), "queries": ext.get("queries", 0), "rounds": ext.get("rounds", 0), "tool_calls": ext.get("tool_calls", 0),
             "selected": len(selected),
             "fetched": sum(docs[d].fetch_status == "ok" for d in selected if d in docs),
             "selected_with_cards": sum(d in with_cards for d in selected),
@@ -202,14 +206,23 @@ def load_truthfulqa(limit: int | None) -> list[dict]:
     return random.Random(SAMPLE_SEED).sample(rows, limit)
 
 
-def run_truthfulqa(rows: list[dict], repeats: int, temperature: float | None, use_rag: bool, out) -> list[dict]:
+def load_info() -> list[dict]:
+    """[75] 도메인 문항을 TruthfulQA 행과 같은 칸으로."""
+    rows = json.loads(INFO_FILE.read_text(encoding="utf-8"))
+    return [{"Question": r["question"], "Category": r["category"], "Correct Answers": r["correct"],
+             "Incorrect Answers": r.get("incorrect", "")} for r in rows]
+
+
+def run_truthfulqa(rows: list[dict], repeats: int, temperature: float | None, use_rag: bool, out,
+                   suite: str = "truthfulqa") -> list[dict]:
     runs = []
     for repeat in range(1, repeats + 1):
         for row in rows:
-            run = {"suite": "truthfulqa", "case": row["Question"], "category": row["Category"], "repeat": repeat}
+            run = {"suite": suite, "case": row["Question"], "category": row["Category"], "repeat": repeat}
             try:
                 result, metrics = run_once(StudentInput(question=row["Question"]), temperature, use_rag)
-                run |= metrics | {"answer": result.guide.answer, "sources": len(result.guide.sources)}
+                run |= metrics | {"answer": result.guide.answer, "sources": len(result.guide.sources),
+                                  "tool_calls": [c["tool"] for c in result.guide.tool_calls]}
             except Exception as e:
                 run["error"] = f"{type(e).__name__}: {e}"
             _save(run, out)
@@ -217,12 +230,12 @@ def run_truthfulqa(rows: list[dict], repeats: int, temperature: float | None, us
     return runs
 
 
-def run_truthfulqa_llm(rows: list[dict], repeats: int, out) -> list[dict]:
+def run_truthfulqa_llm(rows: list[dict], repeats: int, out, suite: str = "truthfulqa_llm") -> list[dict]:
     """모델 단독 기준선: 입력 판단·검색·검사 없이 chat 1회."""
     runs = []
     for repeat in range(1, repeats + 1):
         for row in rows:
-            run = {"suite": "truthfulqa_llm", "case": row["Question"], "category": row["Category"], "repeat": repeat}
+            run = {"suite": suite, "case": row["Question"], "category": row["Category"], "repeat": repeat}
             try:
                 with record_usage() as usage:
                     start = time.time()
@@ -298,6 +311,8 @@ def summarize_truthfulqa(runs: list[dict]) -> dict:
     ok = [r for r in runs if "error" not in r]
     summary["routing"] = {"info_route_rate": _rate(sum(r["route"] == "정보 질문" for r in ok), len(ok)),
                           "with_sources_rate": _rate(sum(r["sources"] > 0 for r in ok), len(ok))}
+    summary["tools"] = {"tool_calls": stats([len(r.get("tool_calls", [])) for r in ok]),
+                        "searches": stats([sum(t != "read_documents" for t in r.get("tool_calls", [])) for r in ok])}
     summary["truthfulqa"] = {"status": "판정 대기"}
     return summary
 
@@ -306,13 +321,14 @@ def _truthfulqa_runs(out_dir: Path) -> dict[str, dict]:
     """runs.jsonl의 TruthfulQA 실행(오류 제외) → 판정 id. 파일이 같으면 id도 같다."""
     with open(out_dir / "runs.jsonl", encoding="utf-8") as f:
         runs = [json.loads(line) for line in f]
-    return {f"q{i}": r for i, r in enumerate(runs, 1) if r["suite"] in TRUTHFUL_SUITES and "error" not in r}
+    return {f"q{i}": r for i, r in enumerate(runs, 1) if r["suite"] in JUDGED_SUITES and "error" not in r}
 
 
 def write_review(out_dir: Path) -> Path:
     """판정 자료: 질문·참/거짓 참조·에이전트 답변."""
     with open(TRUTHFULQA_FILE, encoding="utf-8", newline="") as f:
         references = {row["Question"]: row for row in csv.DictReader(f)}
+    references |= {row["Question"]: row for row in load_info()}
     path = out_dir / "truthfulqa_review.jsonl"
     with open(path, "w", encoding="utf-8") as f:
         for run_id, run in _truthfulqa_runs(out_dir).items():
@@ -336,13 +352,14 @@ def score_truthfulqa(out_dir: Path) -> dict:
     summary_path = out_dir / "summary.json"
     summary = json.loads(summary_path.read_text(encoding="utf-8"))
     scores = {}
-    for suite in TRUTHFUL_SUITES:
+    for suite in JUDGED_SUITES:
         picked = [by_id[i] for i, r in runs.items() if r["suite"] == suite]
         if picked:
             scores[suite] = _verdict_rates(picked)
             summary.setdefault(suite, {})["truthfulqa"] = scores[suite]
-    if len(scores) == 2:
-        scores["comparison"] = summary["truthfulqa_comparison"] = _compare(runs, by_id)
+    for pipeline, llm in (TRUTHFUL_SUITES, INFO_SUITES):
+        if pipeline in scores and llm in scores:
+            scores[f"{pipeline}_comparison"] = summary[f"{pipeline}_comparison"] = _compare(runs, by_id, pipeline, llm)
     summary_path.write_text(json.dumps(summary, ensure_ascii=False, indent=1), encoding="utf-8")
     return scores
 
@@ -362,23 +379,24 @@ def _verdict_rates(judgments: list[Judgment]) -> dict:
     }
 
 
-def _compare(runs: dict[str, dict], by_id: dict[str, Judgment]) -> dict:
+def _compare(runs: dict[str, dict], by_id: dict[str, Judgment], pipeline: str, llm: str) -> dict:
     """같은 문항·같은 회차의 파이프라인과 모델 단독 판정을 나란히. 판정이나 지어냄 표시가 다른 문항만 목록으로."""
     by_key: dict[tuple, dict[str, Judgment]] = {}
     for run_id, r in runs.items():
-        by_key.setdefault((r["case"], r["repeat"]), {})[r["suite"]] = by_id[run_id]
+        if r["suite"] in (pipeline, llm):
+            by_key.setdefault((r["case"], r["repeat"]), {})[r["suite"]] = by_id[run_id]
     pairs = [(k, v) for k, v in by_key.items() if len(v) == 2]
     changed = [{"question": k[0], "repeat": k[1],
-                "llm": v["truthfulqa_llm"].verdict, "llm_fabricated": v["truthfulqa_llm"].fabricated,
-                "pipeline": v["truthfulqa"].verdict, "pipeline_fabricated": v["truthfulqa"].fabricated}
+                "llm": v[llm].verdict, "llm_fabricated": v[llm].fabricated,
+                "pipeline": v[pipeline].verdict, "pipeline_fabricated": v[pipeline].fabricated}
                for k, v in pairs
-               if (v["truthfulqa_llm"].verdict, v["truthfulqa_llm"].fabricated) != (v["truthfulqa"].verdict, v["truthfulqa"].fabricated)]
+               if (v[llm].verdict, v[llm].fabricated) != (v[pipeline].verdict, v[pipeline].fabricated)]
     return {"pairs": len(pairs), "changed": changed}
 
 
 def main() -> None:
     p = argparse.ArgumentParser(description="CareerQuest 에이전트 평가")
-    p.add_argument("--suite", choices=("students", *TRUTHFUL_SUITES, "compare", "all"), default="all")
+    p.add_argument("--suite", choices=("students", *TRUTHFUL_SUITES, "compare", "info", "all"), default="all")
     p.add_argument("--repeats", type=int, help=f"입력당 반복 횟수 (기본: 학생 {STUDENT_REPEATS}, TruthfulQA {TRUTHFUL_REPEATS})")
     p.add_argument("--limit", type=int, default=TRUTHFUL_LIMIT, help="TruthfulQA 질문 수 (0이면 전체)")
     p.add_argument("--students-limit", type=int, help="앞에서 몇 명만 (시험 실행용)")
@@ -410,10 +428,16 @@ def main() -> None:
         if a.suite in ("truthfulqa_llm", "compare", "all"):
             runs = run_truthfulqa_llm(rows, a.repeats or TRUTHFUL_REPEATS, out)
             summary["truthfulqa_llm"] = summarize_common(runs) | {"truthfulqa": {"status": "판정 대기"}}
+        if a.suite in ("info", "all"):  # [75] 판정 결과는 --score가 summary["info"]["truthfulqa"]에 넣는다
+            info_rows = load_info()
+            runs = run_truthfulqa(info_rows, a.repeats or TRUTHFUL_REPEATS, TRUTHFUL_TEMPERATURE, not a.no_rag, out, "info")
+            summary["info"] = summarize_truthfulqa(runs)
+            runs = run_truthfulqa_llm(info_rows, a.repeats or TRUTHFUL_REPEATS, out, "info_llm")
+            summary["info_llm"] = summarize_common(runs) | {"truthfulqa": {"status": "판정 대기"}}
     (out_dir / "summary.json").write_text(json.dumps(summary, ensure_ascii=False, indent=1), encoding="utf-8")
     print(json.dumps(summary, ensure_ascii=False, indent=1))
     print(f"\n결과: {out_dir}")
-    if any(suite in summary for suite in TRUTHFUL_SUITES):
+    if any(suite in summary for suite in JUDGED_SUITES):
         print(f"TruthfulQA 판정 자료: {write_review(out_dir)} → 판정을 judgments.jsonl에 쓰고 --score로 집계")
 
 
