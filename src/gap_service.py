@@ -49,8 +49,10 @@ class SkillRowForGap(
     나머지 필드는 그대로 넘어와도 무시합니다.
 
     skill_id가 null이면 Skill 사전에 매핑되지
-    않은 줄이다. 거절하지 않고
-    gap="매핑되지 않음"으로 돌려준다.
+    않은 줄입니다.
+
+    이 경우 skill 이름은 반드시 존재해야 하며,
+    GAP 결과는 "매핑되지 않음"으로 반환합니다.
     """
 
     model_config = ConfigDict(
@@ -62,12 +64,34 @@ class SkillRowForGap(
         gt=0,
     )
 
-    # 모델팀 SkillRow.skill (Skill 이름).
-    # 매핑되지 않은 줄은 이 이름으로만 구분된다
+    # 모델팀 SkillRow.skill
+    #
+    # skill_id가 없는 경우에는
+    # 어떤 Skill이 매핑되지 않았는지
+    # 구분해야 하므로 필수입니다.
     skill: str | None = None
 
     # 수준 비교가 필요한 Skill에만 사용
     required_level: str | None = None
+
+    @field_validator(
+        "skill"
+    )
+    @classmethod
+    def clean_skill(
+        cls,
+        value: str | None,
+    ) -> str | None:
+
+        if value is None:
+            return None
+
+        value = value.strip()
+
+        return (
+            value
+            or None
+        )
 
     @field_validator(
         "required_level"
@@ -81,14 +105,33 @@ class SkillRowForGap(
         if value is None:
             return None
 
-        value = (
-            value.strip()
-        )
+        value = value.strip()
 
         return (
             value
             or None
         )
+
+    @model_validator(
+        mode="after"
+    )
+    def validate_unmapped_skill(
+        self,
+    ) -> "SkillRowForGap":
+
+        if (
+            self.skill_id is None
+            and self.skill is None
+        ):
+            raise ValueError(
+                (
+                    "skill_id가 null인 "
+                    "SkillRow에는 skill 이름이 "
+                    "반드시 필요합니다."
+                )
+            )
+
+        return self
 
 
 class GapRequest(

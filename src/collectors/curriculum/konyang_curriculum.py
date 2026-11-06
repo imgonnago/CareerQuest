@@ -3,40 +3,17 @@ from __future__ import annotations
 import argparse
 import hashlib
 import re
-
-from dataclasses import dataclass
-
+from collections import Counter
+from dataclasses import dataclass, field
 from typing import Any
-
-from urllib.parse import (
-    parse_qs,
-    unquote,
-    urljoin,
-    urlparse,
-)
+from urllib.parse import parse_qs, unquote, urljoin, urlparse
 
 import pymupdf
 import requests
-
 from bs4 import BeautifulSoup
-
-from pydantic import (
-    BaseModel,
-    Field,
-)
-
-from sqlalchemy.orm import (
-    Session,
-)
-
-from engine.llm import (
-    LLMConfig,
-    LLM_MODEL,
-    chat,
-)
+from sqlalchemy.orm import Session
 
 from src.db.database import engine
-
 from src.loaders.course_loader import (
     upsert_course_record,
     upsert_curriculum_document,
@@ -48,73 +25,153 @@ from src.loaders.course_loader import (
 # ============================================================
 
 KONYANG_AI_CURRICULUM_PAGE = (
-    "https://ai.konyang.ac.kr/"
-    "prog/curriculum/ai/sub01_05/view.do"
+    "https://ai.konyang.ac.kr/prog/curriculum/ai/sub01_05/view.do"
 )
 
-# 공식 페이지에서 PDF 자동 탐색이 실패할 때만 사용
-FALLBACK_PDF_URL = (
-    "https://ai.konyang.ac.kr/"
-    "uploads_clone/curriculum/"
+FALLBACK_PDF_URL_2026_AI = (
+    "https://ai.konyang.ac.kr/uploads_clone/curriculum/"
     "STB_202610201036110470.pdf"
 )
 
-DEFAULT_DEPARTMENT = (
-    "인공지능학과"
-)
-
-DEFAULT_CURRICULUM_YEAR = (
-    2026
-)
-
-DEFAULT_REVISION_TYPE = (
-    "BASE"
-)
+DEFAULT_DEPARTMENT = "인공지능학과"
+DEFAULT_CURRICULUM_YEAR = 2026
+DEFAULT_REVISION_TYPE = "BASE"
 
 HTTP_TIMEOUT = 30
 
 USER_AGENT = (
-    "Mozilla/5.0 "
-    "(Windows NT 10.0; Win64; x64) "
-    "AppleWebKit/537.36 "
-    "(KHTML, like Gecko) "
-    "Chrome/150.0 Safari/537.36"
+    "CareerQuestAI-AcademicProject/0.1 "
+    "(university project)"
 )
 
-STRICT_COURSE_CODE_RE = (
-    re.compile(
-        r"^\d{5}[A-Za-z]$"
-    )
+STRICT_COURSE_CODE_RE = re.compile(
+    r"^\d{5}[A-Za-z]$"
 )
+
+COURSE_CODE_FIND_RE = re.compile(
+    r"(?<![0-9A-Za-z])(\d{5}[A-Za-z])(?![0-9A-Za-z])"
+)
+
+EXPECTED_COURSE_COUNTS: dict[
+    tuple[int, str],
+    int,
+] = {
+    (
+        2026,
+        "인공지능학과",
+    ):
+        66,
+}
+
+# 2026 인공지능학과 PDF 기준
+#
+# 교양 25개 + 전공 33개 = 58개
+#   → 학기 / 이수구분 존재
+#
+# 현장실습 8개
+#   → 학기 / 이수구분이 없을 수 있음
+EXPECTED_METADATA_MINIMUMS: dict[
+    tuple[int, str],
+    dict[str, int],
+] = {
+    (
+        2026,
+        "인공지능학과",
+    ): {
+        "year_level": 66,
+        "semester": 58,
+        "completion_type": 58,
+        "credits": 66,
+    },
+}
 
 BLOCKED_NAMES = {
     "합계",
     "소계",
     "계",
+    "총계",
     "이수학점",
     "졸업학점",
     "총학점",
     "학점계",
     "교과목",
     "교과목명",
+    "과목명",
+}
+
+INVALID_COMPLETION_TYPES = {
+    "계",
+    "합계",
+    "소계",
+    "총계",
+    "학점계",
+    "이수학점",
+    "졸업학점",
+    "이수구분",
+    "교과영역",
+    "이수영역",
+    "영역",
+    "구분",
+    "이수시기",
+    "방학",
+}
+
+HEADER_ALIASES: dict[
+    str,
+    tuple[str, ...],
+] = {
+    "year_level": (
+        "학년",
+        "이수학년",
+    ),
+
+    "semester": (
+        "학기",
+        "이수학기",
+    ),
+
+    "completion_type": (
+        "이수구분",
+        "교과영역",
+        "이수영역",
+        "영역구분",
+        "교과구분",
+    ),
+
+    "course_code": (
+        "교과목코드",
+        "교과목번호",
+        "과목코드",
+        "교과코드",
+        "교과번호",
+    ),
+
+    "name": (
+        "교과목명",
+        "교과목명칭",
+        "과목명",
+    ),
+
+    "credits": (
+        "학점",
+    ),
+
+    "theory_hours": (
+        "이론",
+        "이론시수",
+        "이론시간",
+    ),
+
+    "practice_hours": (
+        "실습",
+        "실습시수",
+        "실습시간",
+    ),
 }
 
 
-CURRICULUM_LLM = (
-    LLMConfig(
-        model=(
-            LLM_MODEL
-        ),
-
-        temperature=0,
-
-        think=False,
-    )
-)
-
-
 # ============================================================
-# 구조
+# 데이터 구조
 # ============================================================
 
 @dataclass
@@ -135,93 +192,76 @@ class CurriculumSource:
     )
 
 
-class QwenCourse(
-    BaseModel
-):
+@dataclass
+class ParseState:
 
-    source_page: int | None = None
+    year_level: (
+        int | None
+    ) = None
 
-    year_level: int | None = None
+    semester: (
+        str | None
+    ) = None
 
-    semester: str | None = None
-
-    completion_type: str | None = None
-
-    course_code: str | None = None
-
-    name: str
-
-    credits: float | None = None
-
-    theory_hours: float | None = None
-
-    practice_hours: float | None = None
+    completion_type: (
+        str | None
+    ) = None
 
 
-class QwenCurriculum(
-    BaseModel
-):
+@dataclass
+class TableDiagnostic:
 
-    courses: list[
-        QwenCourse
-    ] = Field(
+    page_no: int
+
+    table_index: int
+
+    row_count: int
+
+    header_rows: list[
+        int
+    ] = field(
         default_factory=list
+    )
+
+    # PyMuPDF Header만 보고 처음 판단한 결과
+    header_original: dict[
+        str,
+        int,
+    ] = field(
+        default_factory=dict
+    )
+
+    # 실제 데이터 분포까지 보고 보정한 결과
+    header_map: dict[
+        str,
+        int,
+    ] = field(
+        default_factory=dict
+    )
+
+    code_count: int = 0
+
+    seen_years: set[
+        int
+    ] = field(
+        default_factory=set
+    )
+
+    seen_semesters: set[
+        str
+    ] = field(
+        default_factory=set
+    )
+
+    seen_completion_types: set[
+        str
+    ] = field(
+        default_factory=set
     )
 
 
 # ============================================================
-# Qwen Prompt
-# ============================================================
-
-QWEN_PROMPT = """
-당신은 대한민국 대학 공식 교육과정 자료를
-CareerQuest 데이터베이스용으로
-정확하게 구조화하는 데이터 추출기입니다.
-
-아래에는 PDF에서 PyMuPDF로 추출한
-페이지별 텍스트와 표 데이터가 제공됩니다.
-
-제공된 내용만 사용하고
-보이지 않는 정보를 추측하거나
-새로 만들지 마세요.
-
-각 실제 교과목 행에서 다음 필드를 추출하세요.
-
-- source_page: PAGE 번호
-- year_level: 이수 학년
-- semester: 학기
-- completion_type: 이수구분 또는 교과영역
-- course_code: 교과목 코드
-- name: 교과목명
-- credits: 학점
-- theory_hours: 이론 시수
-- practice_hours: 실습 시수
-
-규칙:
-
-1. 실제 교과목만 반환하세요.
-2. 확인되지 않는 값은 null로 두세요.
-3. 표 제목, 헤더, 안내문은 교과목이 아닙니다.
-4. 합계, 소계, 계, 이수학점, 졸업학점 등의 행은 제외하세요.
-5. 병합 셀 때문에 학년/학기가 뒤 행에서 비어 있으면 같은 표 영역의 앞 행 정보를 이어서 적용할 수 있습니다.
-6. PAGE 번호를 source_page로 사용하세요.
-7. 동일한 교과목을 중복 생성하지 마세요.
-8. 교과목명은 원문 표기를 유지하세요.
-9. course_code를 임의로 생성하지 마세요.
-10. 서로 다른 행의 코드와 이름을 임의로 결합하지 마세요.
-11. 설명문, 역량표, 교육목표 등에 등장하는 단어를 교과목으로 만들지 마세요.
-12. TEXT와 TABLE이 같은 내용을 중복 포함해도 실제 교과목은 한 번만 반환하세요.
-13. TABLE 데이터가 존재하면 행 구조 판단에 우선 활용하세요.
-14. 교과목 코드가 없는 분류/요약 항목은 반환하지 마세요.
-
-목적은 OCR 원문 복원이 아니라
-PostgreSQL에 저장할 신뢰 가능한
-교과목 행 구조화입니다.
-""".strip()
-
-
-# ============================================================
-# 문자열
+# 문자열 / 숫자
 # ============================================================
 
 def clean_text(
@@ -231,15 +271,31 @@ def clean_text(
     if value is None:
         return ""
 
+    return re.sub(
+        r"\s+",
+        " ",
+        str(
+            value
+        ),
+    ).strip()
+
+
+def compact_text(
+    value: Any,
+) -> str:
+
     return (
-        re.sub(
-            r"\s+",
-            " ",
-            str(
-                value
-            ),
+        clean_text(
+            value
         )
-        .strip()
+        .replace(
+            " ",
+            "",
+        )
+        .replace(
+            "\n",
+            "",
+        )
     )
 
 
@@ -261,15 +317,6 @@ def optional_text(
 
 def normalize_name(
     value: Any,
-) -> str:
-
-    return clean_text(
-        value
-    )
-
-
-def normalize_semester(
-    value: Any,
 ) -> str | None:
 
     value = (
@@ -281,78 +328,263 @@ def normalize_semester(
     if not value:
         return None
 
+    if (
+        compact_text(
+            value
+        )
+        in BLOCKED_NAMES
+    ):
+
+        return None
+
+    if (
+        STRICT_COURSE_CODE_RE
+        .fullmatch(
+            value
+        )
+    ):
+
+        return None
+
+    return value
+
+
+def normalize_year_level(
+    value: Any,
+) -> int | None:
+
+    text = (
+        compact_text(
+            value
+        )
+    )
+
+    if not text:
+        return None
+
+    if text in {
+        "1",
+        "2",
+        "3",
+        "4",
+        "5",
+        "6",
+    }:
+
+        return int(
+            text
+        )
+
+    match = (
+        re.fullmatch(
+            r"([1-6])학년",
+            text,
+        )
+    )
+
+    if match:
+
+        return int(
+            match.group(
+                1
+            )
+        )
+
+    return None
+
+
+def normalize_semester(
+    value: Any,
+) -> str | None:
+
+    text = (
+        compact_text(
+            value
+        )
+    )
+
+    if not text:
+        return None
+
+    if text in {
+        "학기",
+        "이수학기",
+        "학기구분",
+    }:
+
+        return None
+
+    if text in {
+        "1",
+        "1.0",
+        "1학기",
+    }:
+
+        return "1"
+
+    if text in {
+        "2",
+        "2.0",
+        "2학기",
+    }:
+
+        return "2"
+
+    if text in {
+        "하계",
+        "하계학기",
+        "여름학기",
+    }:
+
+        return "하계"
+
+    if text in {
+        "동계",
+        "동계학기",
+        "겨울학기",
+    }:
+
+        return "동계"
+
+    return None
+
+
+def is_schedule_token(
+    value: Any,
+) -> bool:
+
+    """
+    이수구분이 아니라
+    학년/학기 또는 운영시기를 나타내는 값인지 검사.
+
+    예:
+    1-1
+    1-2
+    2-1
+    4-2
+    1,2
+    1/2
+    """
+
+    text = (
+        compact_text(
+            value
+        )
+    )
+
+    if not text:
+        return False
+
+    return bool(
+        re.fullmatch(
+            r"(?:"
+            r"[1-6]-(?:1|2)"
+            r"|"
+            r"(?:1|2)[,/](?:1|2)"
+            r")",
+            text,
+        )
+    )
+
+
+def normalize_completion_type(
+    value: Any,
+) -> str | None:
+
+    text = (
+        clean_text(
+            value
+        )
+    )
+
+    if not text:
+        return None
+
     compact = (
-        value.replace(
-            " ",
-            "",
+        compact_text(
+            text
         )
     )
 
-    mapping = {
-        "1학기":
-            "1",
+    if (
+        compact
+        in INVALID_COMPLETION_TYPES
+    ):
 
-        "2학기":
-            "2",
+        return None
 
-        "1":
-            "1",
-
-        "2":
-            "2",
-
-        "하계":
-            "하계",
-
-        "동계":
-            "동계",
-    }
-
-    return (
-        mapping.get(
-            compact,
-            value,
+    if (
+        is_numeric_only(
+            text
         )
-    )
+    ):
+
+        return None
+
+    if (
+        is_schedule_token(
+            text
+        )
+    ):
+
+        return None
+
+    if (
+        extract_course_code(
+            text
+        )
+    ):
+
+        return None
+
+    if (
+        normalize_year_level(
+            text
+        )
+        is not None
+    ):
+
+        return None
+
+    if (
+        normalize_semester(
+            text
+        )
+        is not None
+    ):
+
+        return None
+
+    return text
 
 
 def normalize_number(
     value: Any,
 ) -> float | None:
 
-    if value is None:
-        return None
-
-    try:
-
-        number = float(
+    text = (
+        clean_text(
             value
         )
+    )
 
-    except (
-        TypeError,
-        ValueError,
+    if not text:
+        return None
+
+    if not (
+        re.fullmatch(
+            r"[-+]?\d+(?:\.\d+)?",
+            text,
+        )
     ):
 
-        text_value = (
-            clean_text(
-                value
-            )
-        )
+        return None
 
-        match = (
-            re.search(
-                r"\d+(?:\.\d+)?",
-                text_value,
-            )
+    number = (
+        float(
+            text
         )
-
-        if not match:
-            return None
-
-        number = float(
-            match.group()
-        )
+    )
 
     if number < 0:
         return None
@@ -360,210 +592,78 @@ def normalize_number(
     return number
 
 
-# ============================================================
-# Course 정규화
-# ============================================================
+def extract_course_code(
+    value: Any,
+) -> str | None:
 
-def normalize_course(
-    item: QwenCourse,
-
-    source: CurriculumSource,
-
-    page_count: int,
-) -> dict | None:
-
-    name = (
-        normalize_name(
-            item.name
+    text = (
+        clean_text(
+            value
         )
     )
 
-    if not name:
+    if not text:
         return None
 
     if (
-        name.replace(
-            " ",
-            "",
-        )
-        in BLOCKED_NAMES
-    ):
-
-        return None
-
-    source_page = (
-        item.source_page
-    )
-
-    if (
-        source_page is None
-
-        or not (
-            1
-            <= source_page
-            <= page_count
+        STRICT_COURSE_CODE_RE
+        .fullmatch(
+            text
         )
     ):
 
-        source_page = 1
-
-    year_level = (
-        item.year_level
-    )
-
-    if (
-        year_level is not None
-
-        and not (
-            1
-            <= year_level
-            <= 6
+        return (
+            text.upper()
         )
-    ):
 
-        year_level = None
-
-    credits = (
-        normalize_number(
-            item.credits
-        )
-    )
-
-    theory_hours = (
-        normalize_number(
-            item.theory_hours
-        )
-    )
-
-    practice_hours = (
-        normalize_number(
-            item.practice_hours
+    compact = (
+        compact_text(
+            text
         )
     )
 
     if (
-        credits is not None
-        and credits > 12
+        STRICT_COURSE_CODE_RE
+        .fullmatch(
+            compact
+        )
     ):
 
-        credits = None
+        return (
+            compact.upper()
+        )
 
-    if (
-        theory_hours is not None
-        and theory_hours > 20
-    ):
+    match = (
+        COURSE_CODE_FIND_RE
+        .search(
+            text
+        )
+    )
 
-        theory_hours = None
+    if match:
 
-    if (
-        practice_hours is not None
-        and practice_hours > 30
-    ):
+        return (
+            match.group(
+                1
+            )
+            .upper()
+        )
 
-        practice_hours = None
-
-    return {
-        "department_name":
-            source.department_name,
-
-        "curriculum_year":
-            source.curriculum_year,
-
-        "revision_type":
-            source.revision_type,
-
-        "course_code":
-            optional_text(
-                item.course_code
-            ),
-
-        "name":
-            name,
-
-        "year_level":
-            year_level,
-
-        "semester":
-            normalize_semester(
-                item.semester
-            ),
-
-        "completion_type":
-            optional_text(
-                item.completion_type
-            ),
-
-        "credits":
-            credits,
-
-        "theory_hours":
-            theory_hours,
-
-        "practice_hours":
-            practice_hours,
-
-        "source_file_name":
-            source.file_name,
-
-        "source_page":
-            source_page,
-
-        "source_table":
-            "qwen-local-text",
-
-        "source_url":
-            source.pdf_url,
-    }
+    return None
 
 
-def deduplicate_courses(
-    courses: list[dict],
-) -> list[dict]:
+def is_numeric_only(
+    value: Any,
+) -> bool:
 
-    result: list[
-        dict
-    ] = []
-
-    seen: set[
-        tuple
-    ] = set()
-
-    for course in courses:
-
-        key = (
+    return bool(
+        re.fullmatch(
+            r"[-+]?\d+(?:\.\d+)?",
             clean_text(
-                course.get(
-                    "course_code"
-                )
-            ).upper(),
-
-            clean_text(
-                course.get(
-                    "name"
-                )
-            ),
-
-            course.get(
-                "year_level"
-            ),
-
-            course.get(
-                "semester"
+                value
             ),
         )
-
-        if key in seen:
-            continue
-
-        seen.add(
-            key
-        )
-
-        result.append(
-            course
-        )
-
-    return result
+    )
 
 
 # ============================================================
@@ -581,6 +681,9 @@ def create_http_session(
         {
             "User-Agent":
                 USER_AGENT,
+
+            "Accept-Language":
+                "ko-KR,ko;q=0.9,en;q=0.7",
         }
     )
 
@@ -588,30 +691,36 @@ def create_http_session(
 
 
 # ============================================================
-# PDF 탐색
+# PDF URL 탐색
 # ============================================================
+
 def extract_pdf_from_link(
     href: str,
     base_url: str,
 ) -> str | None:
 
-    href = clean_text(
-        href
+    href = (
+        clean_text(
+            href
+        )
     )
 
     if not href:
         return None
 
-    absolute_url = urljoin(
-        base_url,
-        href,
+    absolute_url = (
+        urljoin(
+            base_url,
+            href,
+        )
     )
 
-    parsed = urlparse(
-        absolute_url
+    parsed = (
+        urlparse(
+            absolute_url
+        )
     )
 
-    # 이미 PDF 직접 링크
     if (
         parsed.path
         .lower()
@@ -619,41 +728,71 @@ def extract_pdf_from_link(
             ".pdf"
         )
     ):
-        return absolute_url
 
-    # pdf.js viewer 형태:
-    #
-    # /pdf.js/web/viewer.html
-    # ?file=/uploads/.../xxx.pdf
-    query = parse_qs(
-        parsed.query
+        return (
+            absolute_url
+        )
+
+    query = (
+        parse_qs(
+            parsed.query
+        )
     )
 
-    file_values = (
+    for file_value in (
         query.get(
             "file"
         )
         or []
-    )
+    ):
 
-    for file_value in file_values:
-
-        file_value = unquote(
-            file_value
+        file_value = (
+            unquote(
+                file_value
+            )
         )
 
         if (
             ".pdf"
-            not in file_value.lower()
+            in file_value.lower()
         ):
-            continue
 
-        return urljoin(
-            absolute_url,
-            file_value,
+            return (
+                urljoin(
+                    absolute_url,
+                    file_value,
+                )
+            )
+
+    decoded = (
+        unquote(
+            href
+        )
+    )
+
+    match = (
+        re.search(
+            r"(/[A-Za-z0-9_./-]+\.pdf)",
+            decoded,
+            flags=(
+                re.IGNORECASE
+            ),
+        )
+    )
+
+    if match:
+
+        return (
+            urljoin(
+                base_url,
+                match.group(
+                    1
+                ),
+            )
         )
 
     return None
+
 
 def discover_curriculum_pdf(
     *,
@@ -665,7 +804,9 @@ def discover_curriculum_pdf(
         create_http_session()
     )
 
-    pdf_url: str | None = None
+    pdf_url: (
+        str | None
+    ) = None
 
     try:
 
@@ -680,6 +821,16 @@ def discover_curriculum_pdf(
 
         response.raise_for_status()
 
+        if (
+            response
+            .apparent_encoding
+        ):
+
+            response.encoding = (
+                response
+                .apparent_encoding
+            )
+
         soup = (
             BeautifulSoup(
                 response.text,
@@ -687,75 +838,112 @@ def discover_curriculum_pdf(
             )
         )
 
-        candidates: list[str] = []
+        target_phrase = (
+            f"{curriculum_year}학년도 "
+            f"{department_name} 교육과정"
+        )
 
-        # ----------------------------------------------------
-        # href 링크 탐색
-        # ----------------------------------------------------
+        preferred: list[
+            str
+        ] = []
+
+        others: list[
+            str
+        ] = []
 
         for tag in (
             soup.find_all(
-                href=True
+                [
+                    "a",
+                    "iframe",
+                    "embed",
+                    "object",
+                ]
             )
         ):
 
-            href = clean_text(
-                tag.get(
-                    "href"
+            visible_text = (
+                clean_text(
+                    tag.get_text(
+                        " ",
+                        strip=True,
+                    )
                 )
             )
 
-            extracted = (
-                extract_pdf_from_link(
-                    href,
-                    KONYANG_AI_CURRICULUM_PAGE,
-                )
-            )
+            for attribute in (
+                "href",
+                "src",
+                "data",
+                "onclick",
+            ):
 
-            if extracted:
-                candidates.append(
-                    extracted
-                )
-
-        # ----------------------------------------------------
-        # HTML 내부 문자열에 직접 들어간 PDF / viewer URL 탐색
-        # ----------------------------------------------------
-
-        for raw_url in re.findall(
-            r"""(?:"|')([^"']+(?:\.pdf|viewer\.html\?file=[^"']+))(?:"|')""",
-            response.text,
-            flags=re.IGNORECASE,
-        ):
-
-            extracted = (
-                extract_pdf_from_link(
-                    raw_url,
-                    KONYANG_AI_CURRICULUM_PAGE,
-                )
-            )
-
-            if extracted:
-                candidates.append(
-                    extracted
+                value = (
+                    tag.get(
+                        attribute
+                    )
                 )
 
-        unique_candidates = list(
+                if not value:
+                    continue
+
+                found = (
+                    extract_pdf_from_link(
+                        str(
+                            value
+                        ),
+                        KONYANG_AI_CURRICULUM_PAGE,
+                    )
+                )
+
+                if not found:
+                    continue
+
+                others.append(
+                    found
+                )
+
+                if (
+                    target_phrase
+                    in visible_text
+                ):
+
+                    preferred.append(
+                        found
+                    )
+
+        preferred = list(
             dict.fromkeys(
-                candidates
+                preferred
             )
         )
 
-        if unique_candidates:
+        others = list(
+            dict.fromkeys(
+                others
+            )
+        )
 
-            # 현재 인공지능학과 공식 페이지에서
-            # 발견되는 교육과정 PDF 사용
+        if preferred:
+
             pdf_url = (
-                unique_candidates[
+                preferred[
                     0
                 ]
             )
 
-    except requests.RequestException as exc:
+        elif others:
+
+            pdf_url = (
+                others[
+                    0
+                ]
+            )
+
+    except (
+        requests
+        .RequestException
+    ) as exc:
 
         print(
             (
@@ -765,23 +953,38 @@ def discover_curriculum_pdf(
             )
         )
 
-    # --------------------------------------------------------
-    # 공식 페이지 구조 변경 등에 대비한 fallback
-    # --------------------------------------------------------
-
     if not pdf_url:
 
-        print(
-            (
-                "공식 페이지에서 PDF "
-                "자동 탐색 실패 "
-                "-> fallback URL 사용"
-            )
-        )
+        if (
+            curriculum_year
+            == 2026
 
-        pdf_url = (
-            FALLBACK_PDF_URL
-        )
+            and department_name
+            == "인공지능학과"
+        ):
+
+            print(
+                (
+                    "공식 페이지에서 PDF "
+                    "자동 탐색 실패 "
+                    "-> 2026 AI fallback URL 사용"
+                )
+            )
+
+            pdf_url = (
+                FALLBACK_PDF_URL_2026_AI
+            )
+
+        else:
+
+            raise RuntimeError(
+                (
+                    "공식 페이지에서 대상 "
+                    "교육과정 PDF를 찾지 못했습니다: "
+                    f"{curriculum_year} / "
+                    f"{department_name}"
+                )
+            )
 
     file_name = (
         urlparse(
@@ -791,32 +994,32 @@ def discover_curriculum_pdf(
         .rsplit(
             "/",
             1,
-        )[
-            -1
-        ]
+        )[-1]
         or "curriculum.pdf"
     )
 
-    return CurriculumSource(
-        page_url=(
-            KONYANG_AI_CURRICULUM_PAGE
-        ),
+    return (
+        CurriculumSource(
+            page_url=(
+                KONYANG_AI_CURRICULUM_PAGE
+            ),
 
-        pdf_url=(
-            pdf_url
-        ),
+            pdf_url=(
+                pdf_url
+            ),
 
-        file_name=(
-            file_name
-        ),
+            file_name=(
+                file_name
+            ),
 
-        department_name=(
-            department_name
-        ),
+            department_name=(
+                department_name
+            ),
 
-        curriculum_year=(
-            curriculum_year
-        ),
+            curriculum_year=(
+                curriculum_year
+            ),
+        )
     )
 
 
@@ -835,6 +1038,11 @@ def download_pdf_bytes(
             timeout=(
                 HTTP_TIMEOUT
             ),
+
+            headers={
+                "Referer":
+                    source.page_url,
+            },
         )
     )
 
@@ -860,7 +1068,43 @@ def download_pdf_bytes(
 
 
 # ============================================================
-# 로컬 Audit
+# PyMuPDF
+# ============================================================
+
+def find_page_tables(
+    page: pymupdf.Page,
+) -> list[Any]:
+
+    try:
+
+        finder = (
+            page.find_tables()
+        )
+
+        return (
+            getattr(
+                finder,
+                "tables",
+                None,
+            )
+            or []
+        )
+
+    except Exception as exc:
+
+        print(
+            (
+                "  [WARN] "
+                f"page {page.number + 1} "
+                f"표 탐지 실패: {exc}"
+            )
+        )
+
+        return []
+
+
+# ============================================================
+# 독립 Audit
 # ============================================================
 
 def local_audit(
@@ -893,7 +1137,8 @@ def local_audit(
         ):
 
             page = (
-                document.load_page(
+                document
+                .load_page(
                     page_index
                 )
             )
@@ -907,86 +1152,60 @@ def local_audit(
                 str
             ] = set()
 
-            # 표 탐색
-            try:
-
-                finder = (
-                    page.find_tables()
+            for table in (
+                find_page_tables(
+                    page
                 )
-
-                tables = (
-                    getattr(
-                        finder,
-                        "tables",
-                        None,
-                    )
-                    or []
-                )
-
-            except Exception:
-
-                tables = []
-
-            for table in tables:
+            ):
 
                 try:
 
                     rows = (
                         table.extract()
+                        or []
                     )
 
                 except Exception:
 
                     continue
 
-                for row in (
-                    rows
-                    or []
-                ):
+                for row in rows:
 
-                    for cell in row:
+                    for cell in (
+                        row
+                        or []
+                    ):
 
-                        token = (
-                            clean_text(
+                        code = (
+                            extract_course_code(
                                 cell
                             )
                         )
 
-                        if (
-                            STRICT_COURSE_CODE_RE
-                            .fullmatch(
-                                token
-                            )
-                        ):
+                        if code:
 
                             page_codes.add(
-                                token.upper()
+                                code
                             )
 
-            # 텍스트 레이어에서도 코드 탐색
             for word in (
                 page.get_text(
                     "words"
                 )
             ):
 
-                token = (
-                    clean_text(
+                code = (
+                    extract_course_code(
                         word[
                             4
                         ]
                     )
                 )
 
-                if (
-                    STRICT_COURSE_CODE_RE
-                    .fullmatch(
-                        token
-                    )
-                ):
+                if code:
 
                     page_codes.add(
-                        token.upper()
+                        code
                     )
 
             course_codes.update(
@@ -995,8 +1214,10 @@ def local_audit(
 
             page_counts[
                 page_no
-            ] = len(
-                page_codes
+            ] = (
+                len(
+                    page_codes
+                )
             )
 
         page_count = (
@@ -1019,18 +1240,2324 @@ def local_audit(
 
         "candidate_count":
             sum(
-                page_counts.values()
+                page_counts
+                .values()
             ),
     }
 
 
 # ============================================================
-# PDF -> Qwen Context
+# Header 기본 탐지
 # ============================================================
 
-def build_qwen_pdf_context(
-    pdf_bytes: bytes,
+def alias_matches(
+    header_text: str,
+    aliases: tuple[
+        str,
+        ...,
+    ],
+) -> bool:
+
+    header = (
+        compact_text(
+            header_text
+        )
+    )
+
+    if not header:
+        return False
+
+    for alias in aliases:
+
+        alias_compact = (
+            compact_text(
+                alias
+            )
+        )
+
+        if (
+            header
+            == alias_compact
+        ):
+
+            return True
+
+        if (
+            len(
+                alias_compact
+            )
+            >= 2
+
+            and alias_compact
+            in header
+        ):
+
+            return True
+
+    return False
+
+
+def row_header_keys(
+    row: list[Any],
+) -> set[str]:
+
+    keys: set[
+        str
+    ] = set()
+
+    for cell in (
+        row
+        or []
+    ):
+
+        text = (
+            clean_text(
+                cell
+            )
+        )
+
+        if not text:
+            continue
+
+        for (
+            key,
+            aliases,
+        ) in (
+            HEADER_ALIASES
+            .items()
+        ):
+
+            if (
+                alias_matches(
+                    text,
+                    aliases,
+                )
+            ):
+
+                keys.add(
+                    key
+                )
+
+    return keys
+
+
+def detect_header_map(
+    rows: list[
+        list[Any]
+    ],
+) -> tuple[
+    dict[
+        str,
+        int,
+    ],
+    list[
+        int
+    ],
+]:
+
+    search_limit = (
+        min(
+            len(
+                rows
+            ),
+            12,
+        )
+    )
+
+    header_rows: list[
+        int
+    ] = []
+
+    for row_index in range(
+        search_limit
+    ):
+
+        row = (
+            rows[
+                row_index
+            ]
+            or []
+        )
+
+        if any(
+            extract_course_code(
+                cell
+            )
+            for cell in row
+        ):
+
+            continue
+
+        if (
+            row_header_keys(
+                row
+            )
+        ):
+
+            header_rows.append(
+                row_index
+            )
+
+    if not header_rows:
+
+        return (
+            {},
+            [],
+        )
+
+    max_columns = max(
+        len(
+            rows[
+                index
+            ]
+            or []
+        )
+
+        for index
+        in header_rows
+    )
+
+    combined_headers: list[
+        str
+    ] = []
+
+    for column_index in range(
+        max_columns
+    ):
+
+        parts: list[
+            str
+        ] = []
+
+        for row_index in (
+            header_rows
+        ):
+
+            row = (
+                rows[
+                    row_index
+                ]
+                or []
+            )
+
+            if (
+                column_index
+                >= len(
+                    row
+                )
+            ):
+
+                continue
+
+            value = (
+                clean_text(
+                    row[
+                        column_index
+                    ]
+                )
+            )
+
+            if (
+                value
+
+                and value
+                not in parts
+            ):
+
+                parts.append(
+                    value
+                )
+
+        combined_headers.append(
+            " ".join(
+                parts
+            )
+        )
+
+    header_map: dict[
+        str,
+        int,
+    ] = {}
+
+    used_columns: set[
+        int
+    ] = set()
+
+    key_order = (
+        "course_code",
+        "name",
+        "year_level",
+        "semester",
+        "completion_type",
+        "credits",
+        "theory_hours",
+        "practice_hours",
+    )
+
+    for key in (
+        key_order
+    ):
+
+        aliases = (
+            HEADER_ALIASES[
+                key
+            ]
+        )
+
+        for (
+            column_index,
+            header_text,
+        ) in enumerate(
+            combined_headers
+        ):
+
+            if (
+                column_index
+                in used_columns
+            ):
+
+                continue
+
+            if (
+                alias_matches(
+                    header_text,
+                    aliases,
+                )
+            ):
+
+                header_map[
+                    key
+                ] = (
+                    column_index
+                )
+
+                used_columns.add(
+                    column_index
+                )
+
+                break
+
+    return (
+        header_map,
+        header_rows,
+    )
+
+
+def get_cell(
+    cells: list[str],
+    header_map: dict[
+        str,
+        int,
+    ],
+    key: str,
 ) -> str:
+
+    index = (
+        header_map.get(
+            key
+        )
+    )
+
+    if (
+        index is None
+
+        or index < 0
+
+        or index
+        >= len(
+            cells
+        )
+    ):
+
+        return ""
+
+    return (
+        clean_text(
+            cells[
+                index
+            ]
+        )
+    )
+
+
+# ============================================================
+# 실제 데이터 열 분석
+# ============================================================
+
+def data_rows_only(
+    rows: list[
+        list[Any]
+    ],
+    header_rows: list[
+        int
+    ],
+) -> list[
+    list[
+        str
+    ]
+]:
+
+    result: list[
+        list[
+            str
+        ]
+    ] = []
+
+    for (
+        row_index,
+        row,
+    ) in enumerate(
+        rows
+    ):
+
+        if (
+            row_index
+            in header_rows
+        ):
+
+            continue
+
+        cells = [
+            clean_text(
+                cell
+            )
+
+            for cell
+            in (
+                row
+                or []
+            )
+        ]
+
+        if any(
+            cells
+        ):
+
+            result.append(
+                cells
+            )
+
+    return result
+
+
+def column_values(
+    rows: list[
+        list[
+            str
+        ]
+    ],
+    column_index: int,
+) -> list[str]:
+
+    values: list[
+        str
+    ] = []
+
+    for row in rows:
+
+        if (
+            column_index
+            >= len(
+                row
+            )
+        ):
+
+            continue
+
+        value = (
+            clean_text(
+                row[
+                    column_index
+                ]
+            )
+        )
+
+        if value:
+
+            values.append(
+                value
+            )
+
+    return values
+
+
+def year_column_score(
+    values: list[str],
+) -> tuple[
+    int,
+    int,
+]:
+
+    normalized = [
+        normalize_year_level(
+            value
+        )
+
+        for value
+        in values
+    ]
+
+    years = [
+        value
+
+        for value
+        in normalized
+
+        if value
+        is not None
+    ]
+
+    return (
+        len(
+            years
+        ),
+        len(
+            set(
+                years
+            )
+        ),
+    )
+
+
+def semester_column_score(
+    values: list[str],
+) -> tuple[
+    int,
+    int,
+]:
+
+    normalized = [
+        normalize_semester(
+            value
+        )
+
+        for value
+        in values
+    ]
+
+    semesters = [
+        value
+
+        for value
+        in normalized
+
+        if value
+        is not None
+    ]
+
+    return (
+        len(
+            semesters
+        ),
+        len(
+            set(
+                semesters
+            )
+        ),
+    )
+
+
+def completion_column_score(
+    values: list[str],
+) -> tuple[
+    int,
+    int,
+]:
+
+    normalized = [
+        normalize_completion_type(
+            value
+        )
+
+        for value
+        in values
+    ]
+
+    types = [
+        value
+
+        for value
+        in normalized
+
+        if value
+        is not None
+    ]
+
+    return (
+        len(
+            types
+        ),
+        len(
+            set(
+                types
+            )
+        ),
+    )
+
+
+# ============================================================
+# Header 의미 자동 보정
+# ============================================================
+
+def semantic_repair_header_map(
+    rows: list[list[Any]],
+    header_map: dict[str, int],
+    header_rows: list[int],
+) -> dict[str, int]:
+
+    """
+    Header 텍스트와 실제 데이터 분포를 함께 사용해
+    학년 / 학기 / 이수구분 위치를 보정한다.
+
+    건양대 교육과정 표의 기본 구조:
+
+        이수구분 | 학년 | 학기 | 교과목코드 | 교과목명 | ...
+
+    원칙:
+    1. course_code 위치를 먼저 확정
+    2. 코드 왼쪽에서 semester 열 탐색
+    3. semester를 제외하고 year 열 탐색
+    4. year/semester를 제외하고 남는 텍스트 열을
+       completion_type으로 사용
+    5. 1-1 / 1-2 같은 이수시기 값은
+       completion_type으로 인정하지 않음
+    """
+
+    result = dict(
+        header_map
+    )
+
+    data_rows = (
+        data_rows_only(
+            rows,
+            header_rows,
+        )
+    )
+
+    if not data_rows:
+        return result
+
+    # ========================================================
+    # 1. 교과목 코드 열 확정
+    # ========================================================
+
+    code_index = (
+        result.get(
+            "course_code"
+        )
+    )
+
+    max_columns = max(
+        (
+            len(
+                row
+            )
+            for row
+            in data_rows
+        ),
+        default=0,
+    )
+
+    if (
+        code_index
+        is None
+    ):
+
+        best_column: (
+            int | None
+        ) = None
+
+        best_count = 0
+
+        for column_index in range(
+            max_columns
+        ):
+
+            count = sum(
+                1
+                for value
+                in column_values(
+                    data_rows,
+                    column_index,
+                )
+                if extract_course_code(
+                    value
+                )
+            )
+
+            if (
+                count
+                > best_count
+            ):
+
+                best_count = (
+                    count
+                )
+
+                best_column = (
+                    column_index
+                )
+
+        if (
+            best_column
+            is not None
+        ):
+
+            code_index = (
+                best_column
+            )
+
+            result[
+                "course_code"
+            ] = (
+                best_column
+            )
+
+    if (
+        code_index
+        is None
+        or code_index
+        <= 0
+    ):
+
+        return result
+
+    prefix_columns = list(
+        range(
+            code_index
+        )
+    )
+
+    # ========================================================
+    # 2. 학기 열
+    # ========================================================
+
+    raw_semester = (
+        header_map.get(
+            "semester"
+        )
+    )
+
+    semester_scores: list[
+        tuple[
+            int,
+            int,
+            int,
+            int,
+        ]
+    ] = []
+
+    for column_index in (
+        prefix_columns
+    ):
+
+        values = (
+            column_values(
+                data_rows,
+                column_index,
+            )
+        )
+
+        normalized = [
+            normalize_semester(
+                value
+            )
+            for value
+            in values
+        ]
+
+        valid = [
+            value
+            for value
+            in normalized
+            if value
+            is not None
+        ]
+
+        count = len(
+            valid
+        )
+
+        diversity = len(
+            set(
+                valid
+            )
+        )
+
+        raw_bonus = (
+            1
+            if (
+                column_index
+                == raw_semester
+            )
+            else 0
+        )
+
+        # 우선순위:
+        # 실제 학기 값이 많이 존재
+        # → 기존 Header와 일치
+        # → 1/2 등 종류가 너무 많지 않음
+        semester_scores.append(
+            (
+                count,
+                raw_bonus,
+                -diversity,
+                -column_index,
+            )
+        )
+
+    if semester_scores:
+
+        best = max(
+            semester_scores
+        )
+
+        best_count = (
+            best[
+                0
+            ]
+        )
+
+        best_column = (
+            -best[
+                3
+            ]
+        )
+
+        if (
+            best_count
+            > 0
+        ):
+
+            result[
+                "semester"
+            ] = (
+                best_column
+            )
+
+        else:
+
+            result.pop(
+                "semester",
+                None,
+            )
+
+    semester_column = (
+        result.get(
+            "semester"
+        )
+    )
+
+    # ========================================================
+    # 3. 학년 열
+    # ========================================================
+
+    raw_year = (
+        header_map.get(
+            "year_level"
+        )
+    )
+
+    year_scores: list[
+        tuple[
+            int,
+            int,
+            int,
+            int,
+        ]
+    ] = []
+
+    for column_index in (
+        prefix_columns
+    ):
+
+        if (
+            column_index
+            == semester_column
+        ):
+
+            continue
+
+        values = (
+            column_values(
+                data_rows,
+                column_index,
+            )
+        )
+
+        normalized = [
+            normalize_year_level(
+                value
+            )
+            for value
+            in values
+        ]
+
+        valid = [
+            value
+            for value
+            in normalized
+            if value
+            is not None
+        ]
+
+        count = len(
+            valid
+        )
+
+        diversity = len(
+            set(
+                valid
+            )
+        )
+
+        raw_bonus = (
+            1
+            if (
+                column_index
+                == raw_year
+            )
+            else 0
+        )
+
+        # 학년은 1/2/3/4처럼
+        # 서로 다른 값이 나오는 것이 중요
+        year_scores.append(
+            (
+                diversity,
+                count,
+                raw_bonus,
+                -column_index,
+            )
+        )
+
+    if year_scores:
+
+        best = max(
+            year_scores
+        )
+
+        best_diversity = (
+            best[
+                0
+            ]
+        )
+
+        best_count = (
+            best[
+                1
+            ]
+        )
+
+        best_column = (
+            -best[
+                3
+            ]
+        )
+
+        if (
+            best_count
+            > 0
+            and best_diversity
+            > 0
+        ):
+
+            result[
+                "year_level"
+            ] = (
+                best_column
+            )
+
+        else:
+
+            result.pop(
+                "year_level",
+                None,
+            )
+
+    year_column = (
+        result.get(
+            "year_level"
+        )
+    )
+
+    # ========================================================
+    # 4. 이수구분 열
+    #
+    # 여기서는 점수제로 선택하지 않는다.
+    #
+    # 교과목 코드 앞에서
+    # 학년/학기 열을 제외하고 남는 열 중
+    # 실제 텍스트 분류값이 존재하는 첫 열을 사용.
+    # ========================================================
+
+    result.pop(
+        "completion_type",
+        None,
+    )
+
+    remaining_columns = [
+        column_index
+
+        for column_index
+        in prefix_columns
+
+        if (
+            column_index
+            not in {
+                year_column,
+                semester_column,
+            }
+        )
+    ]
+
+    for column_index in (
+        remaining_columns
+    ):
+
+        values = (
+            column_values(
+                data_rows,
+                column_index,
+            )
+        )
+
+        valid_values = [
+            value
+            for value
+            in (
+                normalize_completion_type(
+                    raw_value
+                )
+                for raw_value
+                in values
+            )
+            if value
+            is not None
+        ]
+
+        if not valid_values:
+            continue
+
+        # ----------------------------------------------------
+        # 1-1 / 1-2 / 2-1 ...
+        # 같은 이수시기 열이면 제외
+        # ----------------------------------------------------
+
+        schedule_count = sum(
+            1
+            for value
+            in values
+            if is_schedule_token(
+                value
+            )
+        )
+
+        if (
+            schedule_count
+            >= len(
+                values
+            )
+            * 0.5
+        ):
+
+            continue
+
+        # ----------------------------------------------------
+        # 실제 이수구분 후보
+        #
+        # 예:
+        # 진로 취창업
+        # 인성과 도전
+        # SW 기초
+        # 의사소통
+        # 기본
+        # 심화
+        # ----------------------------------------------------
+
+        result[
+            "completion_type"
+        ] = (
+            column_index
+        )
+
+        break
+
+    return result
+# ============================================================
+# 행 파싱
+# ============================================================
+
+def infer_name_from_row(
+    cells: list[str],
+    code_index: int,
+) -> str | None:
+
+    for cell in (
+        cells[
+            code_index + 1:
+        ]
+    ):
+
+        candidate = (
+            normalize_name(
+                cell
+            )
+        )
+
+        if not candidate:
+            continue
+
+        if (
+            is_numeric_only(
+                candidate
+            )
+        ):
+
+            continue
+
+        if (
+            compact_text(
+                candidate
+            )
+            in INVALID_COMPLETION_TYPES
+        ):
+
+            continue
+
+        return candidate
+
+    return None
+
+
+def numeric_tail_after_name(
+    cells: list[str],
+    *,
+    name_index: int | None,
+    code_index: int,
+) -> list[float]:
+
+    start = (
+        name_index
+        + 1
+
+        if (
+            name_index
+            is not None
+
+            and name_index
+            >= 0
+        )
+
+        else (
+            code_index
+            + 1
+        )
+    )
+
+    values: list[
+        float
+    ] = []
+
+    for cell in (
+        cells[
+            start:
+        ]
+    ):
+
+        value = (
+            normalize_number(
+                cell
+            )
+        )
+
+        if (
+            value
+            is not None
+        ):
+
+            values.append(
+                value
+            )
+
+    return values
+
+
+def build_course_record(
+    *,
+    source: CurriculumSource,
+    page_no: int,
+    table_index: int | None,
+    row_index: int | None,
+    code: str,
+    name: str,
+    year_level: int | None,
+    semester: str | None,
+    completion_type: str | None,
+    credits: float | None,
+    theory_hours: float | None,
+    practice_hours: float | None,
+    source_text: str,
+    source_table: str,
+) -> dict:
+
+    return {
+        "department_name":
+            source.department_name,
+
+        "curriculum_year":
+            source.curriculum_year,
+
+        "revision_type":
+            source.revision_type,
+
+        "course_code":
+            code,
+
+        "name":
+            name,
+
+        "year_level":
+            year_level,
+
+        "semester":
+            semester,
+
+        "completion_type":
+            normalize_completion_type(
+                completion_type
+            ),
+
+        "credits":
+            credits,
+
+        "theory_hours":
+            theory_hours,
+
+        "practice_hours":
+            practice_hours,
+
+        "source_file_name":
+            source.file_name,
+
+        "source_page":
+            page_no,
+
+        "source_table":
+            source_table,
+
+        "source_row":
+            row_index,
+
+        "source_url":
+            source.pdf_url,
+
+        "source_text":
+            source_text,
+
+        "raw_metadata": {
+            "table_index":
+                table_index,
+
+            "parser":
+                source_table,
+        },
+    }
+
+
+def parse_table_rows(
+    *,
+    rows: list[
+        list[Any]
+    ],
+    source: CurriculumSource,
+    page_no: int,
+    table_index: int,
+) -> tuple[
+    list[
+        dict
+    ],
+    TableDiagnostic,
+]:
+
+    (
+        header_original,
+        header_rows,
+    ) = (
+        detect_header_map(
+            rows
+        )
+    )
+
+    # ---------------------------------------------
+    # 핵심:
+    # Header 문자만 보지 않고 실제 값으로 보정
+    # ---------------------------------------------
+
+    header_map = (
+        semantic_repair_header_map(
+            rows,
+            header_original,
+            header_rows,
+        )
+    )
+
+    diagnostic = (
+        TableDiagnostic(
+            page_no=(
+                page_no
+            ),
+
+            table_index=(
+                table_index
+            ),
+
+            row_count=(
+                len(
+                    rows
+                )
+            ),
+
+            header_rows=[
+                index
+                + 1
+
+                for index
+                in header_rows
+            ],
+
+            header_original=dict(
+                header_original
+            ),
+
+            header_map=dict(
+                header_map
+            ),
+        )
+    )
+
+    # 표마다 독립된 상태 사용
+    state = (
+        ParseState()
+    )
+
+    courses: list[
+        dict
+    ] = []
+
+    for (
+        row_index,
+        row,
+    ) in enumerate(
+        rows
+    ):
+
+        if (
+            row_index
+            in header_rows
+        ):
+
+            continue
+
+        cells = [
+            clean_text(
+                cell
+            )
+
+            for cell
+            in (
+                row
+                or []
+            )
+        ]
+
+        if not any(
+            cells
+        ):
+
+            continue
+
+        # ----------------------------------------------------
+        # 병합셀 값 먼저 갱신
+        # ----------------------------------------------------
+
+        parsed_year = (
+            normalize_year_level(
+                get_cell(
+                    cells,
+                    header_map,
+                    "year_level",
+                )
+            )
+        )
+
+        if (
+            parsed_year
+            is not None
+        ):
+
+            state.year_level = (
+                parsed_year
+            )
+
+        parsed_semester = (
+            normalize_semester(
+                get_cell(
+                    cells,
+                    header_map,
+                    "semester",
+                )
+            )
+        )
+
+        if (
+            parsed_semester
+            is not None
+        ):
+
+            state.semester = (
+                parsed_semester
+            )
+
+        parsed_completion = (
+            normalize_completion_type(
+                get_cell(
+                    cells,
+                    header_map,
+                    "completion_type",
+                )
+            )
+        )
+
+        if (
+            parsed_completion
+            is not None
+        ):
+
+            state.completion_type = (
+                parsed_completion
+            )
+
+        # ----------------------------------------------------
+        # 교과목 코드
+        # ----------------------------------------------------
+
+        code: (
+            str | None
+        ) = None
+
+        code_index: (
+            int | None
+        ) = None
+
+        code_from_column = (
+            get_cell(
+                cells,
+                header_map,
+                "course_code",
+            )
+        )
+
+        if (
+            code_from_column
+        ):
+
+            code = (
+                extract_course_code(
+                    code_from_column
+                )
+            )
+
+            if code:
+
+                code_index = (
+                    header_map.get(
+                        "course_code"
+                    )
+                )
+
+        # Header가 틀려도 전체 행에서 한 번 더 탐색
+        if not code:
+
+            for (
+                index,
+                cell,
+            ) in enumerate(
+                cells
+            ):
+
+                found = (
+                    extract_course_code(
+                        cell
+                    )
+                )
+
+                if found:
+
+                    code = (
+                        found
+                    )
+
+                    code_index = (
+                        index
+                    )
+
+                    break
+
+        # 코드 없는 행은
+        # 병합셀 상태만 갱신하고 Course 생성 안 함
+        if (
+            not code
+
+            or code_index
+            is None
+        ):
+
+            continue
+
+        # ----------------------------------------------------
+        # 이름
+        # ----------------------------------------------------
+
+        name_index = (
+            header_map.get(
+                "name"
+            )
+        )
+
+        name = (
+            normalize_name(
+                get_cell(
+                    cells,
+                    header_map,
+                    "name",
+                )
+            )
+        )
+
+        if not name:
+
+            name = (
+                infer_name_from_row(
+                    cells,
+                    code_index,
+                )
+            )
+
+        if not name:
+
+            continue
+
+        # ----------------------------------------------------
+        # 학점 / 이론 / 실습
+        # ----------------------------------------------------
+
+        credits = (
+            normalize_number(
+                get_cell(
+                    cells,
+                    header_map,
+                    "credits",
+                )
+            )
+        )
+
+        theory_hours = (
+            normalize_number(
+                get_cell(
+                    cells,
+                    header_map,
+                    "theory_hours",
+                )
+            )
+        )
+
+        practice_hours = (
+            normalize_number(
+                get_cell(
+                    cells,
+                    header_map,
+                    "practice_hours",
+                )
+            )
+        )
+
+        if (
+            credits
+            is None
+
+            or theory_hours
+            is None
+
+            or practice_hours
+            is None
+        ):
+
+            tail = (
+                numeric_tail_after_name(
+                    cells,
+
+                    name_index=(
+                        name_index
+                    ),
+
+                    code_index=(
+                        code_index
+                    ),
+                )
+            )
+
+            if (
+                credits
+                is None
+
+                and len(
+                    tail
+                )
+                >= 1
+            ):
+
+                credits = (
+                    tail[
+                        0
+                    ]
+                )
+
+            if (
+                theory_hours
+                is None
+
+                and len(
+                    tail
+                )
+                >= 2
+            ):
+
+                theory_hours = (
+                    tail[
+                        1
+                    ]
+                )
+
+            if (
+                practice_hours
+                is None
+
+                and len(
+                    tail
+                )
+                >= 3
+            ):
+
+                practice_hours = (
+                    tail[
+                        2
+                    ]
+                )
+
+        # 현장실습은 15학점 등 가능
+        if (
+            credits
+            is not None
+
+            and not (
+                0
+                <= credits
+                <= 24
+            )
+        ):
+
+            credits = None
+
+        if (
+            theory_hours
+            is not None
+
+            and not (
+                0
+                <= theory_hours
+                <= 30
+            )
+        ):
+
+            theory_hours = None
+
+        if (
+            practice_hours
+            is not None
+
+            and not (
+                0
+                <= practice_hours
+                <= 40
+            )
+        ):
+
+            practice_hours = None
+
+        courses.append(
+            build_course_record(
+                source=(
+                    source
+                ),
+
+                page_no=(
+                    page_no
+                ),
+
+                table_index=(
+                    table_index
+                ),
+
+                row_index=(
+                    row_index
+                    + 1
+                ),
+
+                code=(
+                    code
+                ),
+
+                name=(
+                    name
+                ),
+
+                year_level=(
+                    state.year_level
+                ),
+
+                semester=(
+                    state.semester
+                ),
+
+                completion_type=(
+                    state.completion_type
+                ),
+
+                credits=(
+                    credits
+                ),
+
+                theory_hours=(
+                    theory_hours
+                ),
+
+                practice_hours=(
+                    practice_hours
+                ),
+
+                source_text=(
+                    " | ".join(
+                        cells
+                    )
+                ),
+
+                source_table=(
+                    "pymupdf-table-v4"
+                ),
+            )
+        )
+
+    diagnostic.code_count = (
+        len(
+            courses
+        )
+    )
+
+    diagnostic.seen_years = {
+        int(
+            course[
+                "year_level"
+            ]
+        )
+
+        for course
+        in courses
+
+        if (
+            course.get(
+                "year_level"
+            )
+            is not None
+        )
+    }
+
+    diagnostic.seen_semesters = {
+        str(
+            course[
+                "semester"
+            ]
+        )
+
+        for course
+        in courses
+
+        if (
+            course.get(
+                "semester"
+            )
+        )
+    }
+
+    diagnostic.seen_completion_types = {
+        str(
+            course[
+                "completion_type"
+            ]
+        )
+
+        for course
+        in courses
+
+        if (
+            course.get(
+                "completion_type"
+            )
+        )
+    }
+
+    return (
+        courses,
+        diagnostic,
+    )
+
+
+# ============================================================
+# words 좌표 fallback
+# ============================================================
+
+def group_words_by_visual_line(
+    words: list[
+        tuple
+    ],
+    *,
+    tolerance: float = 4.0,
+) -> list[
+    list[
+        tuple
+    ]
+]:
+
+    ordered = sorted(
+        words,
+
+        key=lambda word: (
+            (
+                float(
+                    word[
+                        1
+                    ]
+                )
+                + float(
+                    word[
+                        3
+                    ]
+                )
+            )
+            / 2.0,
+
+            float(
+                word[
+                    0
+                ]
+            ),
+        ),
+    )
+
+    lines: list[
+        list[
+            tuple
+        ]
+    ] = []
+
+    centers: list[
+        float
+    ] = []
+
+    for word in (
+        ordered
+    ):
+
+        center = (
+            (
+                float(
+                    word[
+                        1
+                    ]
+                )
+                + float(
+                    word[
+                        3
+                    ]
+                )
+            )
+            / 2.0
+        )
+
+        target: (
+            int | None
+        ) = None
+
+        for index in range(
+            len(
+                lines
+            )
+            - 1,
+            -1,
+            -1,
+        ):
+
+            if (
+                abs(
+                    centers[
+                        index
+                    ]
+                    - center
+                )
+                <= tolerance
+            ):
+
+                target = (
+                    index
+                )
+
+                break
+
+            if (
+                center
+                - centers[
+                    index
+                ]
+                > tolerance
+            ):
+
+                break
+
+        if (
+            target
+            is None
+        ):
+
+            lines.append(
+                [
+                    word
+                ]
+            )
+
+            centers.append(
+                center
+            )
+
+        else:
+
+            lines[
+                target
+            ].append(
+                word
+            )
+
+            count = (
+                len(
+                    lines[
+                        target
+                    ]
+                )
+            )
+
+            centers[
+                target
+            ] = (
+                (
+                    centers[
+                        target
+                    ]
+                    * (
+                        count
+                        - 1
+                    )
+                )
+                + center
+            ) / count
+
+    for line in lines:
+
+        line.sort(
+            key=lambda word:
+                float(
+                    word[
+                        0
+                    ]
+                )
+        )
+
+    return lines
+
+
+def fallback_name_from_words(
+    line: list[
+        tuple
+    ],
+    code_index: int,
+) -> str | None:
+
+    parts: list[
+        str
+    ] = []
+
+    for word in (
+        line[
+            code_index
+            + 1:
+        ]
+    ):
+
+        token = (
+            clean_text(
+                word[
+                    4
+                ]
+            )
+        )
+
+        if not token:
+            continue
+
+        if (
+            is_numeric_only(
+                token
+            )
+        ):
+
+            if parts:
+                break
+
+            continue
+
+        if (
+            extract_course_code(
+                token
+            )
+        ):
+
+            continue
+
+        parts.append(
+            token
+        )
+
+    return (
+        normalize_name(
+            " ".join(
+                parts
+            )
+        )
+    )
+
+
+def parse_missing_codes_from_words(
+    *,
+    page: pymupdf.Page,
+    source: CurriculumSource,
+    target_codes: set[
+        str
+    ],
+) -> list[
+    dict
+]:
+
+    if not target_codes:
+
+        return []
+
+    result: list[
+        dict
+    ] = []
+
+    remaining = set(
+        target_codes
+    )
+
+    lines = (
+        group_words_by_visual_line(
+            page.get_text(
+                "words"
+            )
+        )
+    )
+
+    for (
+        line_index,
+        line,
+    ) in enumerate(
+        lines,
+        start=1,
+    ):
+
+        tokens = [
+            clean_text(
+                word[
+                    4
+                ]
+            )
+
+            for word
+            in line
+        ]
+
+        for (
+            code_index,
+            token,
+        ) in enumerate(
+            tokens
+        ):
+
+            code = (
+                extract_course_code(
+                    token
+                )
+            )
+
+            if (
+                not code
+
+                or code
+                not in remaining
+            ):
+
+                continue
+
+            name = (
+                fallback_name_from_words(
+                    line,
+                    code_index,
+                )
+            )
+
+            if not name:
+
+                continue
+
+            result.append(
+                build_course_record(
+                    source=(
+                        source
+                    ),
+
+                    page_no=(
+                        page.number
+                        + 1
+                    ),
+
+                    table_index=None,
+
+                    row_index=(
+                        line_index
+                    ),
+
+                    code=(
+                        code
+                    ),
+
+                    name=(
+                        name
+                    ),
+
+                    # words fallback에서는
+                    # 자신 없는 메타데이터를 추측하지 않음
+                    year_level=None,
+
+                    semester=None,
+
+                    completion_type=None,
+
+                    credits=None,
+
+                    theory_hours=None,
+
+                    practice_hours=None,
+
+                    source_text=(
+                        " ".join(
+                            tokens
+                        )
+                    ),
+
+                    source_table=(
+                        "pymupdf-words-fallback"
+                    ),
+                )
+            )
+
+            remaining.remove(
+                code
+            )
+
+            break
+
+        if not remaining:
+
+            break
+
+    return result
+
+
+# ============================================================
+# 중복 처리
+# ============================================================
+
+def course_quality_score(
+    course: dict,
+) -> tuple[
+    int,
+    int,
+    int,
+]:
+
+    metadata_score = sum(
+        course.get(
+            key
+        )
+        is not None
+
+        for key in (
+            "year_level",
+            "semester",
+            "completion_type",
+            "credits",
+            "theory_hours",
+            "practice_hours",
+        )
+    )
+
+    table_score = (
+        1
+
+        if (
+            course.get(
+                "source_table"
+            )
+            != "pymupdf-words-fallback"
+        )
+
+        else 0
+    )
+
+    page = (
+        int(
+            course.get(
+                "source_page"
+            )
+            or 9999
+        )
+    )
+
+    # 메타데이터 많은 행 우선,
+    # 동점이면 실제 앞쪽 교과목 표 우선
+    return (
+        metadata_score,
+        table_score,
+        -page,
+    )
+
+
+def deduplicate_courses(
+    courses: list[
+        dict
+    ],
+) -> list[
+    dict
+]:
+
+    by_code: dict[
+        str,
+        dict,
+    ] = {}
+
+    for course in (
+        courses
+    ):
+
+        code = (
+            clean_text(
+                course.get(
+                    "course_code"
+                )
+            )
+            .upper()
+        )
+
+        if not code:
+
+            continue
+
+        existing = (
+            by_code.get(
+                code
+            )
+        )
+
+        if (
+            existing
+            is None
+
+            or course_quality_score(
+                course
+            )
+            >
+            course_quality_score(
+                existing
+            )
+        ):
+
+            by_code[
+                code
+            ] = (
+                course
+            )
+
+    result = list(
+        by_code
+        .values()
+    )
+
+    result.sort(
+        key=lambda course: (
+            course.get(
+                "source_page"
+            )
+            or 9999,
+
+            course.get(
+                "source_row"
+            )
+            or 9999,
+
+            course.get(
+                "course_code"
+            )
+            or "",
+        )
+    )
+
+    return result
+
+
+# ============================================================
+# 전체 Parser
+# ============================================================
+
+def parse_curriculum_pdf(
+    pdf_bytes: bytes,
+    source: CurriculumSource,
+    audit: dict,
+) -> tuple[
+    list[
+        dict
+    ],
+    list[
+        TableDiagnostic
+    ],
+]:
 
     document = (
         pymupdf.open(
@@ -1042,8 +3569,12 @@ def build_qwen_pdf_context(
         )
     )
 
-    page_blocks: list[
-        str
+    courses: list[
+        dict
+    ] = []
+
+    diagnostics: list[
+        TableDiagnostic
     ] = []
 
     try:
@@ -1053,7 +3584,8 @@ def build_qwen_pdf_context(
         ):
 
             page = (
-                document.load_page(
+                document
+                .load_page(
                     page_index
                 )
             )
@@ -1063,46 +3595,13 @@ def build_qwen_pdf_context(
                 + 1
             )
 
-            page_text = (
-                page.get_text(
-                    "text",
-                    sort=True,
-                )
-                .strip()
-            )
-
-            table_blocks: list[
-                str
-            ] = []
-
-            table_codes: set[
-                str
-            ] = set()
-
-            try:
-
-                finder = (
-                    page.find_tables()
-                )
-
-                tables = (
-                    getattr(
-                        finder,
-                        "tables",
-                        None,
-                    )
-                    or []
-                )
-
-            except Exception:
-
-                tables = []
-
             for (
                 table_index,
                 table,
             ) in enumerate(
-                tables,
+                find_page_tables(
+                    page
+                ),
                 start=1,
             ):
 
@@ -1110,411 +3609,355 @@ def build_qwen_pdf_context(
 
                     rows = (
                         table.extract()
+                        or []
                     )
 
-                except Exception:
+                except Exception as exc:
+
+                    print(
+                        (
+                            f"  [WARN] "
+                            f"p{page_no} "
+                            f"table {table_index} "
+                            f"추출 실패: "
+                            f"{exc}"
+                        )
+                    )
 
                     continue
 
-                row_lines: list[
-                    str
-                ] = []
+                (
+                    table_courses,
+                    diagnostic,
+                ) = (
+                    parse_table_rows(
+                        rows=(
+                            rows
+                        ),
 
-                for row in (
-                    rows
-                    or []
-                ):
+                        source=(
+                            source
+                        ),
 
-                    cells = [
-                        clean_text(
-                            cell
-                        )
+                        page_no=(
+                            page_no
+                        ),
 
-                        for cell in row
-                    ]
-
-                    if not any(
-                        cells
-                    ):
-                        continue
-
-                    for cell in cells:
-
-                        if (
-                            STRICT_COURSE_CODE_RE
-                            .fullmatch(
-                                cell
-                            )
-                        ):
-
-                            table_codes.add(
-                                cell.upper()
-                            )
-
-                    row_lines.append(
-                        " | ".join(
-                            cells
-                        )
+                        table_index=(
+                            table_index
+                        ),
                     )
+                )
 
-                if row_lines:
+                courses.extend(
+                    table_courses
+                )
 
-                    table_blocks.append(
-                        (
-                            f"[TABLE "
-                            f"{table_index}]\n"
-                            + "\n".join(
-                                row_lines
-                            )
-                        )
+                diagnostics.append(
+                    diagnostic
+                )
+
+        courses = (
+            deduplicate_courses(
+                courses
+            )
+        )
+
+        parsed_codes = {
+            course[
+                "course_code"
+            ]
+            .upper()
+
+            for course
+            in courses
+
+            if (
+                course.get(
+                    "course_code"
+                )
+            )
+        }
+
+        missing_codes = (
+            set(
+                audit[
+                    "course_codes"
+                ]
+            )
+            - parsed_codes
+        )
+
+        if missing_codes:
+
+            print(
+                (
+                    "\n  표 파서 누락 코드 "
+                    f"{len(missing_codes)}개 "
+                    "-> words fallback 시도"
+                )
+            )
+
+            for page_index in range(
+                document.page_count
+            ):
+
+                if not missing_codes:
+
+                    break
+
+                page = (
+                    document
+                    .load_page(
+                        page_index
                     )
+                )
 
-            page_codes = {
-                clean_text(
-                    word[
-                        4
-                    ]
-                ).upper()
+                page_codes = {
+                    code
 
-                for word in (
-                    page.get_text(
+                    for word
+                    in page.get_text(
                         "words"
                     )
-                )
 
-                if (
-                    STRICT_COURSE_CODE_RE
-                    .fullmatch(
-                        clean_text(
-                            word[
-                                4
-                            ]
+                    if (
+                        code := (
+                            extract_course_code(
+                                word[
+                                    4
+                                ]
+                            )
                         )
                     )
+                    is not None
+                }
+
+                target = (
+                    missing_codes
+                    & page_codes
                 )
-            }
 
-            table_text = (
-                "\n\n".join(
-                    table_blocks
-                )
-                or "(표 추출 없음)"
-            )
+                if not target:
 
-            # 표가 페이지의 모든 교과목 코드를
-            # 포함한다면 중복되는 전체 텍스트는
-            # 보내지 않아 context를 절약한다.
-            needs_text = (
-                not table_blocks
+                    continue
 
-                or not (
-                    page_codes
-                    .issubset(
-                        table_codes
+                recovered = (
+                    parse_missing_codes_from_words(
+                        page=(
+                            page
+                        ),
+
+                        source=(
+                            source
+                        ),
+
+                        target_codes=(
+                            target
+                        ),
                     )
                 )
-            )
 
-            text_value = (
-                page_text
+                courses.extend(
+                    recovered
+                )
 
-                if needs_text
+                missing_codes -= {
+                    item[
+                        "course_code"
+                    ]
 
-                else (
-                    "(TABLE 데이터로 "
-                    "충분하여 생략)"
+                    for item
+                    in recovered
+                }
+
+            courses = (
+                deduplicate_courses(
+                    courses
                 )
             )
 
-            text_value = (
-                text_value
-                or "(텍스트 추출 없음)"
-            )
-
-            page_blocks.append(
-                (
-                    f"===== PAGE "
-                    f"{page_no} =====\n"
-
-                    f"[TABLES]\n"
-                    f"{table_text}\n\n"
-
-                    f"[TEXT]\n"
-                    f"{text_value}"
-                )
-            )
+        return (
+            courses,
+            diagnostics,
+        )
 
     finally:
 
         document.close()
 
-    return (
-        "\n\n".join(
-            page_blocks
-        )
-    )
-
 
 # ============================================================
-# Qwen 구조화
+# 검증
 # ============================================================
 
-def extract_with_qwen(
-    pdf_bytes: bytes,
-
-    source: CurriculumSource,
-
-    page_count: int,
-) -> list[dict]:
-
-    pdf_context = (
-        build_qwen_pdf_context(
-            pdf_bytes
-        )
-    )
-
-    prompt = (
-        QWEN_PROMPT
-
-        + "\n\n"
-        + "[대상 메타데이터]\n"
-
-        + "- 학교: 건양대학교\n"
-
-        + (
-            f"- 학과: "
-            f"{source.department_name}\n"
-        )
-
-        + (
-            "- 교육과정 연도: "
-            f"{source.curriculum_year}\n"
-        )
-
-        + (
-            "- PDF 총 페이지: "
-            f"{page_count}\n\n"
-        )
-
-        + "[PDF 추출 데이터]\n"
-
-        + pdf_context
-    )
-
-    message = (
-        chat(
-            [
-                {
-                    "role":
-                        "system",
-
-                    "content":
-                        (
-                            "당신은 대학 교육과정 "
-                            "구조화 데이터 추출기입니다. "
-                            "제공된 원문에 없는 정보는 "
-                            "생성하지 마세요."
-                        ),
-                },
-                {
-                    "role":
-                        "user",
-
-                    "content":
-                        prompt,
-                },
-            ],
-
-            CURRICULUM_LLM,
-
-            format=(
-                QwenCurriculum
-                .model_json_schema()
-            ),
-        )
-    )
-
-    content = (
-        clean_text(
-            message.get(
-                "content"
-            )
-        )
-    )
-
-    if not content:
-
-        raise RuntimeError(
-            (
-                "Qwen이 빈 응답을 "
-                "반환했습니다."
-            )
-        )
-
-    parsed = (
-        QwenCurriculum
-        .model_validate_json(
-            content
-        )
-    )
-
+def validate_parser_result(
     courses: list[
         dict
-    ] = []
-
-    for item in (
-        parsed.courses
-    ):
-
-        record = (
-            normalize_course(
-                item,
-                source,
-                page_count,
-            )
-        )
-
-        if record:
-
-            courses.append(
-                record
-            )
-
-    filtered: list[
-        dict
-    ] = []
-
-    for course in courses:
-
-        course_code = (
-            clean_text(
-                course.get(
-                    "course_code"
-                )
-            )
-            .upper()
-        )
-
-        if not course_code:
-            continue
-
-        if not (
-            STRICT_COURSE_CODE_RE
-            .fullmatch(
-                course_code
-            )
-        ):
-            continue
-
-        course[
-            "course_code"
-        ] = (
-            course_code
-        )
-
-        filtered.append(
-            course
-        )
-
-    return (
-        deduplicate_courses(
-            filtered
-        )
-    )
-
-
-# ============================================================
-# Qwen 결과 검증
-# ============================================================
-
-def validate_qwen_result(
-    courses: list[dict],
-
+    ],
     audit: dict,
+    source: CurriculumSource,
 ) -> dict:
 
-    if not courses:
-
-        raise RuntimeError(
-            (
-                "Qwen이 교과목을 "
-                "하나도 추출하지 못했습니다."
-            )
-        )
-
-    if (
-        len(
-            courses
-        )
-        > 300
-    ):
-
-        raise RuntimeError(
-            (
-                "Qwen 추출량이 "
-                "비정상적으로 큽니다: "
-                f"{len(courses)}개"
-            )
-        )
-
-    qwen_codes = {
+    parser_codes = [
         clean_text(
             course.get(
                 "course_code"
             )
         ).upper()
 
-        for course in courses
+        for course
+        in courses
 
         if clean_text(
             course.get(
                 "course_code"
             )
         )
-    }
+    ]
 
-    local_codes = (
+    parser_code_set = set(
+        parser_codes
+    )
+
+    audit_codes = set(
         audit[
             "course_codes"
         ]
     )
 
     overlap = (
-        qwen_codes
-        & local_codes
+        parser_code_set
+        & audit_codes
     )
 
-    no_code_courses = [
-        course
+    source_key = (
+        source.curriculum_year,
+        source.department_name,
+    )
 
-        for course in courses
+    expected_count = (
+        EXPECTED_COURSE_COUNTS
+        .get(
+            source_key
+        )
+    )
 
-        if not clean_text(
+    metadata_minimums = (
+        EXPECTED_METADATA_MINIMUMS
+        .get(
+            source_key,
+            {},
+        )
+    )
+
+    metadata_counts = {
+        "year_level":
+            sum(
+                course.get(
+                    "year_level"
+                )
+                is not None
+
+                for course
+                in courses
+            ),
+
+        "semester":
+            sum(
+                course.get(
+                    "semester"
+                )
+                is not None
+
+                for course
+                in courses
+            ),
+
+        "completion_type":
+            sum(
+                course.get(
+                    "completion_type"
+                )
+                is not None
+
+                for course
+                in courses
+            ),
+
+        "credits":
+            sum(
+                course.get(
+                    "credits"
+                )
+                is not None
+
+                for course
+                in courses
+            ),
+    }
+
+    invalid_completion_codes = [
+        course[
+            "course_code"
+        ]
+
+        for course
+        in courses
+
+        if (
             course.get(
-                "course_code"
+                "completion_type"
+            )
+
+            and (
+                compact_text(
+                    course[
+                        "completion_type"
+                    ]
+                )
+                in INVALID_COMPLETION_TYPES
+
+                or is_schedule_token(
+                    course[
+                        "completion_type"
+                    ]
+                )
             )
         )
     ]
 
+    completion_counter = (
+        Counter(
+            course[
+                "completion_type"
+            ]
+
+            for course
+            in courses
+
+            if (
+                course.get(
+                    "completion_type"
+                )
+            )
+        )
+    )
+
     return {
-        "qwen_course_count":
+        "parser_course_count":
             len(
                 courses
             ),
 
-        "qwen_coded_count":
+        "parser_code_count":
             len(
-                qwen_codes
+                parser_code_set
             ),
 
-        "local_candidate_count":
-            audit[
-                "candidate_count"
-            ],
-
-        "local_code_count":
+        "audit_code_count":
             len(
-                local_codes
+                audit_codes
             ),
 
         "overlap_count":
@@ -1522,40 +3965,73 @@ def validate_qwen_result(
                 overlap
             ),
 
-        "local_overlap_ratio":
+        "audit_overlap_ratio":
             (
                 len(
                     overlap
                 )
                 / len(
-                    local_codes
+                    audit_codes
                 )
 
-                if local_codes
+                if audit_codes
 
                 else None
             ),
 
-        "missing_in_qwen":
+        "missing_in_parser":
             sorted(
-                local_codes
-                - qwen_codes
+                audit_codes
+                - parser_code_set
             ),
 
-        "qwen_only":
+        "parser_only":
             sorted(
-                qwen_codes
-                - local_codes
+                parser_code_set
+                - audit_codes
             ),
 
-        "no_code_courses":
-            no_code_courses,
+        "duplicate_codes":
+            sorted(
+                code
+
+                for code
+                in set(
+                    parser_codes
+                )
+
+                if (
+                    parser_codes
+                    .count(
+                        code
+                    )
+                    > 1
+                )
+            ),
+
+        "expected_count":
+            expected_count,
+
+        "metadata_counts":
+            metadata_counts,
+
+        "metadata_minimums":
+            metadata_minimums,
+
+        "invalid_completion_codes":
+            sorted(
+                invalid_completion_codes
+            ),
+
+        "completion_types":
+            dict(
+                sorted(
+                    completion_counter
+                    .items()
+                )
+            ),
     }
 
-
-# ============================================================
-# DB 저장 Gate
-# ============================================================
 
 def assert_validation_passed(
     validation: dict,
@@ -1567,37 +4043,37 @@ def assert_validation_passed(
 
     if (
         validation[
-            "qwen_course_count"
+            "parser_course_count"
         ]
         != validation[
-            "qwen_coded_count"
+            "parser_code_count"
         ]
     ):
 
         errors.append(
             (
-                "Qwen 교과목 수와 "
-                "코드 보유 수가 다릅니다: "
-                f"{validation['qwen_course_count']} / "
-                f"{validation['qwen_coded_count']}"
+                "Parser 교과목 수와 "
+                "고유 코드 수가 다릅니다: "
+                f"{validation['parser_course_count']} / "
+                f"{validation['parser_code_count']}"
             )
         )
 
     if (
         validation[
-            "qwen_coded_count"
+            "parser_code_count"
         ]
         != validation[
-            "local_code_count"
+            "audit_code_count"
         ]
     ):
 
         errors.append(
             (
-                "Qwen 코드 수와 "
-                "로컬 코드 수가 다릅니다: "
-                f"{validation['qwen_coded_count']} / "
-                f"{validation['local_code_count']}"
+                "Parser 코드 수와 "
+                "Audit 코드 수가 다릅니다: "
+                f"{validation['parser_code_count']} / "
+                f"{validation['audit_code_count']}"
             )
         )
 
@@ -1606,69 +4082,135 @@ def assert_validation_passed(
             "overlap_count"
         ]
         != validation[
-            "local_code_count"
+            "audit_code_count"
         ]
     ):
 
         errors.append(
             (
-                "로컬 코드 전체가 "
-                "Qwen 결과와 일치하지 않습니다: "
+                "Audit 코드 전체가 "
+                "Parser와 일치하지 않습니다: "
                 f"{validation['overlap_count']} / "
-                f"{validation['local_code_count']}"
+                f"{validation['audit_code_count']}"
             )
         )
 
-    ratio = (
+    if (
         validation[
-            "local_overlap_ratio"
+            "missing_in_parser"
+        ]
+    ):
+
+        errors.append(
+            (
+                "Audit에는 있지만 "
+                "Parser에는 없는 코드: "
+                f"{validation['missing_in_parser']}"
+            )
+        )
+
+    if (
+        validation[
+            "parser_only"
+        ]
+    ):
+
+        errors.append(
+            (
+                "Parser에만 있는 코드: "
+                f"{validation['parser_only']}"
+            )
+        )
+
+    if (
+        validation[
+            "duplicate_codes"
+        ]
+    ):
+
+        errors.append(
+            (
+                "중복 교과목 코드: "
+                f"{validation['duplicate_codes']}"
+            )
+        )
+
+    expected_count = (
+        validation[
+            "expected_count"
         ]
     )
 
     if (
-        ratio is None
-        or ratio < 1.0
+        expected_count
+        is not None
+
+        and validation[
+            "parser_code_count"
+        ]
+        != expected_count
     ):
 
         errors.append(
             (
-                "코드 일치율이 "
-                "100%가 아닙니다: "
-                f"{ratio}"
+                "기존 검증 기준 "
+                "교과목 수와 다릅니다: "
+                f"{validation['parser_code_count']} / "
+                f"{expected_count}"
             )
         )
 
-    if validation[
-        "missing_in_qwen"
-    ]:
+    counts = (
+        validation[
+            "metadata_counts"
+        ]
+    )
 
-        errors.append(
-            (
-                "로컬에는 있지만 "
-                "Qwen에는 없는 코드: "
-                f"{validation['missing_in_qwen']}"
+    minimums = (
+        validation[
+            "metadata_minimums"
+        ]
+    )
+
+    for (
+        key,
+        minimum,
+    ) in (
+        minimums
+        .items()
+    ):
+
+        current = (
+            counts.get(
+                key,
+                0,
             )
         )
 
-    if validation[
-        "qwen_only"
-    ]:
+        if (
+            current
+            < minimum
+        ):
 
-        errors.append(
-            (
-                "Qwen에만 있는 코드: "
-                f"{validation['qwen_only']}"
+            errors.append(
+                (
+                    "메타데이터 부족: "
+                    f"{key}={current}, "
+                    f"최소={minimum}"
+                )
             )
-        )
 
-    if validation[
-        "no_code_courses"
-    ]:
+    if (
+        validation[
+            "invalid_completion_codes"
+        ]
+    ):
 
         errors.append(
             (
-                "코드 없는 Qwen "
-                "교과목이 존재합니다."
+                "잘못된 이수구분이 "
+                "남아 있습니다: "
+                f"{validation['invalid_completion_codes']}"
             )
         )
 
@@ -1678,7 +4220,9 @@ def assert_validation_passed(
             "\n[검증 실패]"
         )
 
-        for error in errors:
+        for error in (
+            errors
+        ):
 
             print(
                 f"  - {error}"
@@ -1686,8 +4230,9 @@ def assert_validation_passed(
 
         raise RuntimeError(
             (
-                "교육과정 검증에 실패하여 "
-                "PostgreSQL 적재를 중단합니다."
+                "교육과정 데이터 품질 검증에 "
+                "실패하여 PostgreSQL 적재를 "
+                "중단합니다."
             )
         )
 
@@ -1697,15 +4242,15 @@ def assert_validation_passed(
 
     print(
         (
-            f"  Qwen 교과목: "
-            f"{validation['qwen_course_count']}개"
+            "  Parser 교과목: "
+            f"{validation['parser_course_count']}개"
         )
     )
 
     print(
         (
-            "  로컬 교과목 코드: "
-            f"{validation['local_code_count']}개"
+            "  Audit 교과목 코드: "
+            f"{validation['audit_code_count']}개"
         )
     )
 
@@ -1716,8 +4261,24 @@ def assert_validation_passed(
         )
     )
 
+    if (
+        expected_count
+        is not None
+    ):
+
+        print(
+            (
+                "  기준 교과목 수: "
+                f"{expected_count}개"
+            )
+        )
+
     print(
-        "  일치율: 100.0%"
+        "  코드 일치율: 100.0%"
+    )
+
+    print(
+        "  메타데이터 품질 기준 통과"
     )
 
     print(
@@ -1726,21 +4287,299 @@ def assert_validation_passed(
 
 
 # ============================================================
-# SourceDocument 내용
+# 출력
+# ============================================================
+
+def print_table_diagnostics(
+    diagnostics: list[
+        TableDiagnostic
+    ],
+) -> None:
+
+    print(
+        "\n[표 구조 진단]"
+    )
+
+    relevant = [
+        item
+
+        for item
+        in diagnostics
+
+        if (
+            item.code_count
+            > 0
+        )
+    ]
+
+    for item in (
+        relevant
+    ):
+
+        print(
+            (
+                f"  p{item.page_no} "
+                f"table {item.table_index}"
+                f" | codes={item.code_count}"
+                f" | raw={item.header_original}"
+                f" | fixed={item.header_map}"
+                f" | years="
+                f"{sorted(item.seen_years)}"
+                f" | semesters="
+                f"{sorted(item.seen_semesters)}"
+                f" | types="
+                f"{sorted(item.seen_completion_types)}"
+            )
+        )
+
+
+def print_validation_summary(
+    validation: dict,
+) -> None:
+
+    counts = (
+        validation[
+            "metadata_counts"
+        ]
+    )
+
+    minimums = (
+        validation[
+            "metadata_minimums"
+        ]
+    )
+
+    print(
+        "\n[검증 요약]"
+    )
+
+    print(
+        (
+            "  Parser 교과목: "
+            f"{validation['parser_course_count']}개"
+        )
+    )
+
+    print(
+        (
+            "  Parser 고유 코드: "
+            f"{validation['parser_code_count']}개"
+        )
+    )
+
+    print(
+        (
+            "  Audit 고유 코드: "
+            f"{validation['audit_code_count']}개"
+        )
+    )
+
+    print(
+        (
+            "  코드 일치: "
+            f"{validation['overlap_count']}개"
+        )
+    )
+
+    labels = {
+        "year_level":
+            "학년",
+
+        "semester":
+            "학기",
+
+        "completion_type":
+            "이수구분",
+
+        "credits":
+            "학점",
+    }
+
+    for key in (
+        "year_level",
+        "semester",
+        "completion_type",
+        "credits",
+    ):
+
+        current = (
+            counts.get(
+                key,
+                0,
+            )
+        )
+
+        minimum = (
+            minimums.get(
+                key
+            )
+        )
+
+        suffix = (
+            f" (최소 {minimum})"
+
+            if (
+                minimum
+                is not None
+            )
+
+            else ""
+        )
+
+        print(
+            (
+                f"  {labels[key]}: "
+                f"{current} / "
+                f"{validation['parser_course_count']}"
+                f"{suffix}"
+            )
+        )
+
+    print(
+        (
+            "  이수구분 분포: "
+            f"{validation['completion_types']}"
+        )
+    )
+
+    if (
+        validation[
+            "expected_count"
+        ]
+        is not None
+    ):
+
+        print(
+            (
+                "  기존 검증 기준: "
+                f"{validation['expected_count']}개"
+            )
+        )
+
+
+def print_preview(
+    courses: list[
+        dict
+    ],
+    limit: int = 100,
+) -> None:
+
+    print(
+        "\n[결정론적 Parser 미리보기]"
+    )
+
+    for (
+        index,
+        course,
+    ) in enumerate(
+        courses[
+            :limit
+        ],
+        start=1,
+    ):
+
+        year = (
+            course.get(
+                "year_level"
+            )
+        )
+
+        semester = (
+            course.get(
+                "semester"
+            )
+        )
+
+        credits = (
+            course.get(
+                "credits"
+            )
+        )
+
+        year_text = (
+            f"{year}학년"
+
+            if (
+                year
+                is not None
+            )
+
+            else "-학년"
+        )
+
+        if (
+            semester
+            in {
+                "1",
+                "2",
+            }
+        ):
+
+            semester_text = (
+                f"{semester}학기"
+            )
+
+        elif semester:
+
+            semester_text = (
+                str(
+                    semester
+                )
+            )
+
+        else:
+
+            semester_text = (
+                "-학기"
+            )
+
+        credits_text = (
+            f"{credits}학점"
+
+            if (
+                credits
+                is not None
+            )
+
+            else "-학점"
+        )
+
+        print(
+            (
+                f"{index:03d}. "
+                f"p{course.get('source_page')} | "
+                f"{year_text} | "
+                f"{semester_text} | "
+                f"{course.get('completion_type') or '-'} | "
+                f"{course.get('course_code') or '-'} | "
+                f"{course.get('name')} | "
+                f"{credits_text} | "
+                f"{course.get('source_table')}"
+            )
+        )
+
+
+# ============================================================
+# SourceDocument
 # ============================================================
 
 def build_source_content(
-    courses: list[dict],
+    courses: list[
+        dict
+    ],
 ) -> str:
 
     lines = [
         (
-            "건양대학교 인공지능학과 "
-            "교육과정"
+            "페이지 | 학년 | 학기 | 이수구분 | "
+            "교과목코드 | 교과목명 | "
+            "학점 | 이론 | 실습"
         )
     ]
 
-    for course in courses:
+    for course in (
+        courses
+    ):
 
         lines.append(
             " | ".join(
@@ -1787,68 +4626,78 @@ def build_source_content(
                         or ""
                     ),
 
-                    str(
-                        (
+                    (
+                        str(
                             course.get(
                                 "credits"
                             )
+                        )
 
-                            if course.get(
+                        if (
+                            course.get(
                                 "credits"
                             )
                             is not None
-
-                            else ""
                         )
+
+                        else ""
                     ),
 
-                    str(
-                        (
+                    (
+                        str(
                             course.get(
                                 "theory_hours"
                             )
+                        )
 
-                            if course.get(
+                        if (
+                            course.get(
                                 "theory_hours"
                             )
                             is not None
-
-                            else ""
                         )
+
+                        else ""
                     ),
 
-                    str(
-                        (
+                    (
+                        str(
                             course.get(
                                 "practice_hours"
                             )
+                        )
 
-                            if course.get(
+                        if (
+                            course.get(
                                 "practice_hours"
                             )
                             is not None
-
-                            else ""
                         )
+
+                        else ""
                     ),
                 ]
             )
         )
 
-    return "\n".join(
-        lines
+    return (
+        "\n".join(
+            lines
+        )
     )
 
 
 # ============================================================
-# PostgreSQL 저장
+# PostgreSQL
 # ============================================================
 
 def save_to_database(
     *,
     source: CurriculumSource,
     pdf_bytes: bytes,
-    courses: list[dict],
+    courses: list[
+        dict
+    ],
     validation: dict,
 ) -> dict:
 
@@ -1860,6 +4709,10 @@ def save_to_database(
 
     created_count = 0
     updated_count = 0
+
+    parent_source_document_id: (
+        int | None
+    ) = None
 
     with Session(
         engine
@@ -1900,13 +4753,10 @@ def save_to_database(
                             "konyang_curriculum",
 
                         "parser":
-                            (
-                                "qwen_local_text_"
-                                "with_local_audit"
-                            ),
+                            "pymupdf_deterministic_v4",
 
-                        "qwen_model":
-                            LLM_MODEL,
+                        "llm_used":
+                            False,
 
                         "pdf_sha256":
                             (
@@ -1921,32 +4771,8 @@ def save_to_database(
                                 courses
                             ),
 
-                        "validation": {
-                            "qwen_course_count":
-                                validation[
-                                    "qwen_course_count"
-                                ],
-
-                            "qwen_coded_count":
-                                validation[
-                                    "qwen_coded_count"
-                                ],
-
-                            "local_code_count":
-                                validation[
-                                    "local_code_count"
-                                ],
-
-                            "overlap_count":
-                                validation[
-                                    "overlap_count"
-                                ],
-
-                            "local_overlap_ratio":
-                                validation[
-                                    "local_overlap_ratio"
-                                ],
-                        },
+                        "validation":
+                            validation,
 
                         "source_page_url":
                             source.page_url,
@@ -1957,11 +4783,19 @@ def save_to_database(
             session.flush()
 
             parent_source_document_id = (
-                parent_document
-                .source_document_id
+                int(
+                    parent_document
+                    .source_document_id
+                )
             )
 
-            for course in courses:
+            for (
+                index,
+                course,
+            ) in enumerate(
+                courses,
+                start=1,
+            ):
 
                 result = (
                     upsert_course_record(
@@ -1975,15 +4809,35 @@ def save_to_database(
                     )
                 )
 
-                if result[
-                    "created"
-                ]:
+                if (
+                    result.get(
+                        "created"
+                    )
+                ):
 
                     created_count += 1
+
+                    status = (
+                        "CREATED"
+                    )
 
                 else:
 
                     updated_count += 1
+
+                    status = (
+                        "UPDATED"
+                    )
+
+                print(
+                    (
+                        f"  [{index:02d}/"
+                        f"{len(courses):02d}] "
+                        f"{status} | "
+                        f"{course.get('course_code')} | "
+                        f"{course.get('name')}"
+                    )
+                )
 
             session.commit()
 
@@ -1994,117 +4848,20 @@ def save_to_database(
             raise
 
     return {
+        "total":
+            len(
+                courses
+            ),
+
         "created":
             created_count,
 
         "updated":
             updated_count,
 
-        "total":
-            len(
-                courses
-            ),
+        "parent_source_document_id":
+            parent_source_document_id,
     }
-
-
-# ============================================================
-# 출력
-# ============================================================
-
-def print_preview(
-    courses: list[dict],
-
-    limit: int = 40,
-) -> None:
-
-    print(
-        "\n[Qwen 추출 미리보기]"
-    )
-
-    for (
-        index,
-        course,
-    ) in enumerate(
-        courses[
-            :limit
-        ],
-        start=1,
-    ):
-
-        print(
-            (
-                f"{index:03d}. "
-
-                f"p"
-                f"{course.get('source_page')}"
-
-                f" | "
-                f"{course.get('year_level') or '-'}"
-                f"학년"
-
-                f" | "
-                f"{course.get('semester') or '-'}"
-                f"학기"
-
-                f" | "
-                f"{course.get('completion_type') or '-'}"
-
-                f" | "
-                f"{course.get('course_code') or '-'}"
-
-                f" | "
-                f"{course.get('name')}"
-
-                f" | "
-                f"{course.get('credits') if course.get('credits') is not None else '-'}"
-                f"학점"
-            )
-        )
-
-    if (
-        len(
-            courses
-        )
-        > limit
-    ):
-
-        print(
-            (
-                "... 외 "
-                f"{len(courses) - limit}개"
-            )
-        )
-
-
-def print_mismatch_details(
-    validation: dict,
-) -> None:
-
-    print(
-        "\n[상세 불일치 검사]"
-    )
-
-    print(
-        (
-            "  로컬에는 있지만 "
-            "Qwen에는 없는 코드: "
-            f"{validation['missing_in_qwen']}"
-        )
-    )
-
-    print(
-        (
-            "  Qwen에만 있는 코드: "
-            f"{validation['qwen_only']}"
-        )
-    )
-
-    print(
-        (
-            "  코드 없는 Qwen 항목: "
-            f"{len(validation['no_code_courses'])}개"
-        )
-    )
 
 
 # ============================================================
@@ -2130,10 +4887,8 @@ def run(
 
     print(
         (
-            "CareerQuest - "
-            "건양대학교 교육과정 "
-            "수집/검증/적재 "
-            "(Qwen)"
+            "CareerQuest - 건양대학교 교육과정 "
+            "결정론적 파싱/검증/적재 v4"
         )
     )
 
@@ -2142,7 +4897,7 @@ def run(
     )
 
     # --------------------------------------------------------
-    # 1. PDF
+    # 1
     # --------------------------------------------------------
 
     print(
@@ -2183,7 +4938,7 @@ def run(
     )
 
     # --------------------------------------------------------
-    # 2. 다운로드
+    # 2
     # --------------------------------------------------------
 
     print(
@@ -2204,14 +4959,11 @@ def run(
     )
 
     # --------------------------------------------------------
-    # 3. 로컬 audit
+    # 3
     # --------------------------------------------------------
 
     print(
-        (
-            "\n[3/5] "
-            "로컬 파서 감사(audit)"
-        )
+        "\n[3/5] 독립 코드 Audit"
     )
 
     audit = (
@@ -2229,14 +4981,14 @@ def run(
 
     print(
         (
-            "  로컬 엄격 후보 행: "
+            "  Audit 후보 합계: "
             f"{audit['candidate_count']}개"
         )
     )
 
     print(
         (
-            "  로컬 고유 교과목 코드: "
+            "  고유 교과목 코드: "
             f"{len(audit['course_codes'])}개"
         )
     )
@@ -2244,9 +4996,12 @@ def run(
     for (
         page_no,
         count,
-    ) in audit[
-        "page_counts"
-    ].items():
+    ) in (
+        audit[
+            "page_counts"
+        ]
+        .items()
+    ):
 
         if count:
 
@@ -2254,91 +5009,44 @@ def run(
                 (
                     f"    page "
                     f"{page_no}: "
-                    f"{count}개 후보"
+                    f"{count}개"
                 )
             )
 
     # --------------------------------------------------------
-    # 4. Qwen
+    # 4
     # --------------------------------------------------------
 
     print(
-        (
-            f"\n[4/5] "
-            f"{LLM_MODEL} "
-            "교육과정 구조화"
-        )
+        "\n[4/5] PyMuPDF 결정론적 구조화 v4"
     )
 
-    courses = (
-        extract_with_qwen(
+    (
+        courses,
+        diagnostics,
+    ) = (
+        parse_curriculum_pdf(
             pdf_bytes,
-
             source,
-
-            audit[
-                "page_count"
-            ],
-        )
-    )
-
-    validation = (
-        validate_qwen_result(
-            courses,
             audit,
         )
     )
 
-    print_mismatch_details(
+    validation = (
+        validate_parser_result(
+            courses,
+            audit,
+            source,
+        )
+    )
+
+    print_table_diagnostics(
+        diagnostics
+    )
+
+    print_validation_summary(
         validation
     )
-
-    print(
-        "\n[검증 요약]"
-    )
-
-    print(
-        (
-            f"  Qwen 교과목: "
-            f"{validation['qwen_course_count']}개"
-        )
-    )
-
-    print(
-        (
-            "  Qwen 코드 보유: "
-            f"{validation['qwen_coded_count']}개"
-        )
-    )
-
-    print(
-        (
-            "  로컬 고유 코드: "
-            f"{validation['local_code_count']}개"
-        )
-    )
-
-    print(
-        (
-            "  코드 일치: "
-            f"{validation['overlap_count']}개"
-        )
-    )
-
-    if (
-        validation[
-            "local_overlap_ratio"
-        ]
-        is not None
-    ):
-
-        print(
-            (
-                "  로컬 코드 중 "
-                "Qwen과 일치: "
-                f"{validation['local_overlap_ratio']:.1%}"
-            )
-        )
 
     assert_validation_passed(
         validation
@@ -2349,21 +5057,8 @@ def run(
     )
 
     # --------------------------------------------------------
-    # 5. DB
+    # 5
     # --------------------------------------------------------
-
-    save_result = {
-        "created":
-            0,
-
-        "updated":
-            0,
-
-        "total":
-            len(
-                courses
-            ),
-    }
 
     if save_db:
 
@@ -2371,7 +5066,7 @@ def run(
             "\n[5/5] PostgreSQL 적재"
         )
 
-        save_result = (
+        db_result = (
             save_to_database(
                 source=(
                     source
@@ -2392,24 +5087,57 @@ def run(
         )
 
         print(
+            "\n[DB 적재 완료]"
+        )
+
+        print(
             (
-                f"  생성 "
-                f"{save_result['created']}개 "
-                f"/ 갱신 "
-                f"{save_result['updated']}개 "
-                f"/ 전체 "
-                f"{save_result['total']}개"
+                f"  총: "
+                f"{db_result['total']}개"
+            )
+        )
+
+        print(
+            (
+                f"  신규: "
+                f"{db_result['created']}개"
+            )
+        )
+
+        print(
+            (
+                f"  갱신: "
+                f"{db_result['updated']}개"
+            )
+        )
+
+        print(
+            (
+                "  Parent SourceDocument ID: "
+                f"{db_result['parent_source_document_id']}"
             )
         )
 
     else:
 
         print(
-            (
-                "\n[5/5] "
-                "Dry run - DB 저장 생략"
-            )
+            "\n[5/5] Dry run - DB 저장 생략"
         )
+
+        db_result = None
+
+    print(
+        "\n"
+        + "=" * 72
+    )
+
+    print(
+        "교육과정 수집 작업 완료"
+    )
+
+    print(
+        "=" * 72
+    )
 
     return {
         "source": {
@@ -2423,8 +5151,11 @@ def run(
                 source.file_name,
         },
 
-        "model":
-            LLM_MODEL,
+        "parser":
+            "pymupdf_deterministic_v4",
+
+        "llm_used":
+            False,
 
         "audit": {
             **audit,
@@ -2437,11 +5168,14 @@ def run(
                 ),
         },
 
+        "courses":
+            courses,
+
         "validation":
             validation,
 
-        "save":
-            save_result,
+        "db":
+            db_result,
     }
 
 
@@ -2449,7 +5183,8 @@ def run(
 # CLI
 # ============================================================
 
-def parse_args() -> argparse.Namespace:
+def parse_args(
+) -> argparse.Namespace:
 
     parser = (
         argparse.ArgumentParser()
@@ -2479,10 +5214,13 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
     )
 
-    return parser.parse_args()
+    return (
+        parser.parse_args()
+    )
 
 
-def main() -> None:
+def main(
+) -> None:
 
     args = (
         parse_args()
@@ -2504,4 +5242,5 @@ def main() -> None:
 
 
 if __name__ == "__main__":
+
     main()
