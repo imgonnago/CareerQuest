@@ -1595,126 +1595,56 @@ def infer_title_from_card(
 # 직접 href 방식과 JavaScript onclick 방식 모두 지원.
 # ============================================================
 
+
 def candidate_url_from_news_tag(
     tag: Tag,
-) -> tuple[
-    str,
-    str,
-] | None:
-
-    href = clean_text(
-        tag.get(
-            "href"
-        )
-    )
-
-
-    onclick = clean_text(
-        tag.get(
-            "onclick"
-        )
-    )
-
-
-    data_url = clean_text(
-        tag.get(
-            "data-url"
-        )
-    )
-
-
-    data_href = clean_text(
-        tag.get(
-            "data-href"
-        )
-    )
-
+) -> tuple[str, str] | None:
 
     raw_values = [
-        href,
-        onclick,
-        data_url,
-        data_href,
+        clean_text(tag.get("href")),
+        clean_text(tag.get("onclick")),
+        clean_text(tag.get("data-url")),
+        clean_text(tag.get("data-href")),
     ]
-
 
     for raw in raw_values:
 
         if not raw:
-
             continue
 
-
-        # searchSeq가 직접 들어간 경우
+        # 기존 searchSeq=12345 방식 지원
         match = re.search(
-            r"searchSeq\s*=\s*(\d+)",
+            r"""searchSeq\s*=\s*['"]?(\d+)""",
             raw,
+            flags=re.IGNORECASE,
         )
 
-
-        if match:
-
-            seq = (
-                match.group(1)
-            )
-
-
-            url = (
-                BASE_URL
-                + "/board/"
-                  "BBSMSTR_000000000251/"
-                  "articleView.do"
-                + "?commonMenuNo=180_35"
-                + f"&searchSeq={seq}"
-            )
-
-
-            return (
-                seq,
-                url,
-            )
-
-
-        # onclick JavaScript:
-        # fnView('17089')
-        # fn_select('17089')
-        # 등 여러 변형 지원
-        if (
-            raw
-            == onclick
-            and onclick
-        ):
-
+        # 실제 청년소식 HTML:
+        # javascript:fn_go_view(17484,'Y')
+        if not match:
             match = re.search(
-                r"['\"](\d{4,})['\"]",
+                r"""(?:fn_go_view|fnView|fn_select)\s*\(\s*['"]?(\d{4,})['"]?\s*(?:,|\))""",
                 raw,
+                flags=re.IGNORECASE,
             )
 
+        if not match:
+            continue
 
-            if match:
+        seq = match.group(1)
 
-                seq = (
-                    match.group(1)
-                )
+        detail_url = (
+            BASE_URL
+            + "/board/BBSMSTR_000000000251/"
+              "articleView.do"
+            + "?commonMenuNo=180_35"
+            + f"&searchSeq={seq}"
+        )
 
-
-                url = (
-                    BASE_URL
-                    + "/board/"
-                      "BBSMSTR_000000000251/"
-                      "articleView.do"
-                    + "?commonMenuNo=180_35"
-                    + f"&searchSeq={seq}"
-                )
-
-
-                return (
-                    seq,
-                    url,
-                )
-
+        return seq, detail_url
 
     return None
+
 
 
 # ============================================================
