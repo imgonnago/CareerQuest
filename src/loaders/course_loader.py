@@ -535,6 +535,34 @@ def upsert_course_record(
         )
     )
 
+    # PDF_GLYPH_SGD_2026
+    # 확인된 PDF 글리프 오류만 교과목명에서 보정
+    if course_name:
+        course_name = re.sub(
+            r"SGD\s*柴\s*(?=지역사회문제해결)",
+            "SGD·",
+            course_name,
+        )
+
+        # 앞서 공식 원본과 대조한 방사선학과 3건
+        if (
+            department_name == "방사선학과"
+            and curriculum_year == 2026
+        ):
+            verified_fixes = {
+                ("50953B", "치과掊유방영상학"):
+                    "치과·유방영상학",
+                ("50966B", "상掊하지영상진단학 및 실습"):
+                    "상·하지영상진단학 및 실습",
+                ("50967B", "흉掊복부掊척추영상진단학 및 실습"):
+                    "흉·복부·척추영상진단학 및 실습",
+            }
+
+            course_name = verified_fixes.get(
+                (course_code, course_name),
+                course_name,
+            )
+
     year_level = (
         parse_int(
             record.get(

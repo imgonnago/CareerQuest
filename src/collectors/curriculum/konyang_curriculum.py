@@ -317,12 +317,13 @@ def optional_text(
 
 def normalize_name(
     value: Any,
-) -> str | None:
+) -> str:
 
-    value = (
-        clean_text(
-            value
-        )
+    # PDF_GLYPH_SGD_2026
+    value = re.sub(
+        r"SGD\s*柴\s*(?=지역사회문제해결)",
+        "SGD·",
+        clean_text(value),
     )
 
     if not value:
@@ -345,6 +346,7 @@ def normalize_name(
     ):
 
         return None
+
 
     return value
 
