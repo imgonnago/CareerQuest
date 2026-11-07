@@ -47,6 +47,8 @@ from engine.prompts.stage2_evidence import (
 )
 from engine.schemas import CardDraft, CardDraftList, EvidenceCard, EvidenceDoc
 from engine.schemas.job import TargetJob
+from engine.tools import jobalio
+from engine.tools.jobalio import TOOL_SPEC as JOB_TOOL_SPEC, search_public_jobs
 from engine.tools.rag_search import TOOL_SPEC as RAG_TOOL_SPEC, RagSearchError, search_rag
 from engine.tools.requirements import TOOL_SPEC as WEB_TOOL_SPEC, RequirementSearchResult, fetch_texts, search_requirements
 
@@ -130,6 +132,9 @@ AGENT_IDLE_TURNS = 2    # [74] 새로 실행된 도구가 없는 턴(같은 검�
 AGENT_NUDGES = 2        # [78] 슬롯이 부족한 채 끝내려 할 때 되묻는 횟수. 두 번째는 첫 되묻기 뒤 카드가 늘었을 때만
 AGENT_QUERY_MAX_WORDS = 6  # [78] 이보다 긴 검색어는 실행하지 않고 줄이게 한다 ([26] 2~5단어, 조금 넘는 것은 봐줌)
 LIST_SNIPPET_CHARS = 80 # [78] 검색 결과 목록에 보여 줄 요약 앞부분
+SEARCH_BEFORE_READ = 3  # [81] 읽지 않고 이어서 실행한 검색이 이만큼이면 안 읽은 문서가 있는 동안 검색 도구를 뺀다 (무엇을 읽을지는 LLM이 고름)
+PROVIDER_RANK = {"rag": 0, "jobalio": 1}  # [84] 활동 외 슬롯 목록 순서. 나머지(웹)는 2
+UNREAD_SHOWN = 10       # [81] 검색이 막히거나 새 문서가 없을 때 다시 보여 줄 안 읽은 문서 수
 AGENT_LIST_MAX = 20     # [74] 검색 결과 한 번에 보여 줄 문서 수. [30] 목록이 길면 앞쪽만 보고 고른다
 # [55] 학생에게 꼭 줄 슬롯. 시간·턴 상한에 닿아도 근거가 0건이면 이 시간만큼 그 슬롯 대화를 한 번 더 연다
 REQUIRED_SLOTS = ("채용 요건", "자격증")
@@ -199,7 +204,8 @@ class EvidencePool:
         lines = []
         for num in nums or self.docs:
             doc = self.docs[num]
-            label = "DB 자료" if doc.provider == "rag" else "본문 가능" if self.readable(num) else "요약만"
+            label = "DB 자료" if doc.provider == "rag" else "공고 원문" if doc.provider == "jobalio" \
+                else "본문 가능" if self.readable(num) else "요약만"
             # [78] 제목만으로는 관계없는 문서를 고른다. 고르는 데 쓸 앞부분만 보여 주고, 본문은 read_documents가 전체를 읽는다
             brief = re.sub(r"\s+", " ", doc.snippet or "").strip()[:LIST_SNIPPET_CHARS]
             lines.append(f"[{num}] {doc.title} ({label})" + (f" — {brief}" if brief else ""))
@@ -220,8 +226,8 @@ class EvidencePool:
         # 안정 정렬: [48] RAG 먼저, [57] 그 안에서 건양대 자료 먼저 (RAG 건양대 → RAG 기타 → 웹 건양대 → 웹)
         if slot == ACTIVITY:  # [61] 외부 → 건양대 → 교육과정 (같은 단계 안에서는 웹 먼저)
             nums.sort(key=lambda n: (self._activity_tier(n), self.docs[n].provider == "rag"))
-        else:  # [48] RAG 먼저, [57] 그 안에서 건양대 자료 먼저
-            nums.sort(key=lambda n: (self.docs[n].provider != "rag", not is_school_doc(self.docs[n], None)))
+        else:  # [48] RAG 먼저, [84] 그다음 잡알리오 공고 원문, [57] 같은 단계 안에서는 건양대 자료 먼저
+            nums.sort(key=lambda n: (PROVIDER_RANK.get(self.docs[n].provider, 2), not is_school_doc(self.docs[n], None)))
         readable = [n for n in nums if self.readable(n)]
         return readable if len(readable) >= MIN_READABLE else readable + [n for n in nums if n not in readable]
 
@@ -633,11 +639,29 @@ class SlotAgent:
         self.dropped = Counter()                   # 걸러낸 사유별 수
         self.rounds: list[RoundLog] = []
         self.filled = {slot: 0 for slot in SLOTS}
+        self.slot = ""                             # 지금 대화의 슬롯
+        self.searches_since_read = 0               # [81] 이 대화에서 마지막 읽기 뒤 실행한 검색 수
+        self.jobs_ok = jobalio.available()         # [84] 잡알리오 키가 있을 때만 search_public_jobs를 준다
+
+    def _unread(self) -> list[str]:
+        """[81] 이 대화 목록에 나왔지만 아직 안 읽은 문서."""
+        return self.pool.order([n for n in self.guard.listed if n not in self.read], self.slot)
+
+    def _unread_block(self) -> str:
+        unread = self._unread()
+        return f"\n\n아직 안 읽은 문서:\n{self.pool.render_titles(unread[:UNREAD_SHOWN])}" if unread else ""
+
+    def _must_read(self) -> bool:
+        return self.searches_since_read >= SEARCH_BEFORE_READ and bool(self._unread())
 
     def tools(self) -> list[dict]:
         specs = [READ_TOOL_SPEC]
+        if self._must_read():
+            return specs
         if not self.guard.exhausted("search_requirements"):
             specs.insert(0, WEB_TOOL_SPEC)
+        if self.jobs_ok and not self.guard.exhausted("search_public_jobs"):
+            specs.insert(0, JOB_TOOL_SPEC)
         if self.rag.enabled and not self.guard.exhausted("search_rag"):
             specs.insert(0, RAG_TOOL_SPEC)
         return specs
@@ -651,13 +675,15 @@ class SlotAgent:
         query = str(query or "").strip()
         if not query:
             return "query가 비어 있음. 검색어를 적어 다시 호출해.", False
+        if self._must_read():
+            return f"검색을 {self.searches_since_read}번 이어서 했다. 새로 검색하기 전에 아래 문서 중 근거가 있을 것을 read_documents로 읽어.{self._unread_block()}", False
         if len(query.split()) > AGENT_QUERY_MAX_WORDS:
             return f'"{query}"는 너무 길어서 실행하지 않았다. 대상 하나 + 찾는 영역 하나, 2~5단어로 줄여.', False
         if self.guard.exhausted(tool):
-            return f"{tool}에서 새 문서가 더 나오지 않는다. 다른 도구를 쓰거나 목록의 문서를 읽거나 끝내.", False
+            return f"{tool}에서 새 문서가 더 나오지 않는다. 다른 도구를 쓰거나 목록의 문서를 읽거나 끝내.{self._unread_block()}", False
         if self.guard.repeated(tool, query):
             self.log(f"[{slot}] 검색어 중복(실행 안 함): {tool} {query}")
-            return f'"{query}"는 이 도구로 이미 검색했다. 다른 방향의 검색어를 쓰거나, 목록의 문서를 읽거나, 끝내.', False
+            return f'"{query}"는 이 도구로 이미 검색했다. 다른 방향의 검색어를 쓰거나, 목록의 문서를 읽거나, 끝내.{self._unread_block()}', False
         if query not in self.used:
             self.used[query] = slot
             self.queries.append(query)
@@ -666,14 +692,17 @@ class SlotAgent:
             res = self.rag.search(query, slot, self.log)
             if res is None:
                 return "DB 검색을 쓸 수 없다. search_requirements를 써.", False
+        elif tool == "search_public_jobs":
+            res = search_public_jobs(query)
         else:
             res = search_requirements(query, per_source=PER_SOURCE, max_fetch=0)
         nums = self.pool.add(res, slot)
         self.timings["search"] += time.time() - t
+        self.searches_since_read += 1
         self.log(f"[{slot}] {tool}: {query} → 문서 {len(nums)}건" + (f" (실패: {', '.join(res.errors)})" if res.errors else ""))
         shown = self.pool.order([n for n in self.guard.fresh(tool, nums) if n not in self.read], slot)
         if not shown:
-            return f'"{query}" 결과에 새 문서가 없다. {self.guard.hint(self._search_tools())}앞 목록에서 아직 안 읽은 문서를 읽거나 다른 검색어·도구를 써.', True
+            return f'"{query}" 결과에 새 문서가 없다. {self.guard.hint(self._search_tools())}아직 안 읽은 문서를 읽거나 다른 검색어·도구를 써.{self._unread_block()}', True
         more = f"\n(외 {len(shown) - AGENT_LIST_MAX}건 생략)" if len(shown) > AGENT_LIST_MAX else ""
         return f'"{query}" 결과:\n{self.pool.render_titles(shown[:AGENT_LIST_MAX])}{more}\n\n{SEARCH_NEXT}', True
 
@@ -705,6 +734,7 @@ class SlotAgent:
         note = ("\n못 읽음: " + "; ".join(skipped)) if skipped else ""
         if not nums:
             return f"읽을 문서가 없다.{note}\n검색 결과 목록의 [D번호]를 고르거나 새로 검색해.", False
+        self.searches_since_read = 0
         t = time.time()
         self.pool.fetch(nums)
         self.timings["fetch"] += time.time() - t
@@ -779,14 +809,14 @@ class SlotAgent:
         return by_doc, rejected
 
     def _search_tools(self) -> list[str]:
-        return ["search_rag", "search_requirements"] if self.rag.enabled else ["search_requirements"]
+        return (["search_rag"] if self.rag.enabled else []) + ["search_requirements"] + (["search_public_jobs"] if self.jobs_ok else [])
 
     def _run_tool(self, name: str, args: dict, slot: str) -> tuple[str, bool]:
-        if name in ("search_rag", "search_requirements"):
+        if name in self._search_tools():
             return self._search(name, args.get("query"), slot)
         if name == "read_documents":
             return self._read(args.get("docs"), slot)
-        return f"{name}이라는 도구는 없다. search_rag, search_requirements, read_documents 중에서 써.", False
+        return f"{name}이라는 도구는 없다. {', '.join(self._search_tools())}, read_documents 중에서 써.", False
 
     # ---------------------------------------------------------------- 슬롯 대화 (LLM ↔ 도구 루프)
 
@@ -802,6 +832,7 @@ class SlotAgent:
                         directions="\n".join(f"- {d}" for d in directions),
                         used=", ".join(f'"{q}"' for q in used) if used else "없음", extra=SLOT_EXTRA.get(slot, ""))}]
         self.guard.new_conversation()
+        self.slot, self.searches_since_read = slot, 0
         nudges, cards_at_nudge = 0, 0
         self.log(f"=== [{slot}] 에이전트 시작 (슬롯 {self.status()})")
 

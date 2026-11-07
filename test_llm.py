@@ -4,9 +4,9 @@
 - 메시지를 그냥 입력한다. 전공·직무 같은 정보도 대화로 말하면 된다.
 - /new 새 대화, q 종료
 - 실행 중 Ctrl+C는 그 실행만 멈추고 입력으로 돌아간다 (그 메시지는 대화에 넣지 않음).
-- [74][75] LLM이 부르는 도구(search_rag·search_requirements·read_documents)를 실행 중에 바로 보여 준다.
-  도구는 취업 가이드 2단계와 정보 질문만 쓴다. 인사·개념 설명·진로 고민·후속 질문은 도구 없이 답한다.
-- DB가 꺼져 있으면 search_rag 없이 돈다 (시작할 때 상태를 알려 줌).
+- [74][75] LLM이 부르는 도구(search_rag·search_requirements·search_public_jobs·read_documents)를 실행 중에 바로 보여 준다.
+  도구는 취업 가이드 2단계와 정보 질문만 쓴다. 인사·개념 설명·진로 고민·후속 질문은 도구 없이 답한다 ([83] 도구를 물으면 목록은 알려 줌).
+- DB가 꺼져 있으면 search_rag 없이, .env에 JOBALIO_API_KEY가 없으면 search_public_jobs 없이 돈다 (시작할 때 상태를 알려 줌).
 """
 import argparse
 import re
@@ -35,6 +35,12 @@ def rag_status() -> str:
     except Exception as e:
         return f"DB 연결 안 됨 — search_rag 없이 검색 API로만 진행 ({type(e).__name__})"
     return f"DB 연결됨 — search_rag로 찾을 수 있는 문서 {docs}건"
+
+
+def jobs_status() -> str:
+    """[84] 잡알리오(공공기관·공공병원 채용 공고) 도구를 쓸 수 있는지."""
+    from engine.tools import jobalio
+    return "잡알리오 키 있음 — search_public_jobs 사용" if jobalio.available() else "잡알리오 키 없음 — search_public_jobs 없이 진행"
 
 
 def show_tools(result) -> None:
@@ -81,8 +87,9 @@ def main() -> None:
     a = p.parse_args()
 
     history: list[ChatTurn] = []
-    print("CareerQuest 채팅입니다. 편하게 말씀해 주세요. (/new 새 대화, q 종료)")
+    print(f"CareerQuest 취업 가이드 채팅입니다. \n 편하게 말씀해 주세요. (/new 새 대화, q 종료)")
     print(f"[{'RAG 끔 (--no-rag) — 검색 API로만 진행' if a.no_rag else rag_status()}]")
+    print(f"[{jobs_status()}]")
     while True:
         try:
             message = input("\n나: ").strip()

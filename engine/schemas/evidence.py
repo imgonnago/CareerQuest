@@ -12,7 +12,7 @@ from datetime import datetime
 from typing import Literal
 from pydantic import BaseModel, Field, computed_field
 
-Provider = Literal["naver", "kakao", "rag"]
+Provider = Literal["naver", "kakao", "rag", "jobalio"]  # jobalio = 잡알리오 공공기관 채용 API ([84])
 Kind = Literal["blog", "cafe", "web", "document"]  # document = RAG 문서
 FetchStatus = Literal[
     "skipped",      # 본문 수집 대상 아님 (네이버)

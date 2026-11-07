@@ -47,6 +47,8 @@ from engine.prompts.stage0_route import (
 from engine.schemas.chat import ChatTurn, ContextDraft
 from engine.schemas.job import StudentInput, TargetJob
 from engine.schemas.rank import GuideEvidence, GuideResult
+from engine.tools import jobalio
+from engine.tools.jobalio import TOOL_SPEC as JOB_TOOL_SPEC, search_public_jobs
 from engine.tools.rag_search import TOOL_SPEC as RAG_TOOL_SPEC, RagSearchError, search_rag
 from engine.tools.requirements import TOOL_SPEC as WEB_TOOL_SPEC, search_requirements
 from engine.schemas.route import AnswerReview, CrisisCheck, CrisisEmpathy, FollowupCheck, RouteDecision, RouteDraft
@@ -89,6 +91,14 @@ INFO_REVIEWS = 1        # [78] 답변 검토에 걸렸을 때 다시 찾게 하�
 INFO_RETRY_TURNS = 4    # [78] 다시 찾을 때의 턴 상한
 INFO_RETRIES = 1
 COUNSEL_RETRIES = 1
+MEMO_SOURCES = 12          # [87] 이전 답변 메모에 붙일 출처 수 상한
+# [87] 경로별로 답을 어떻게 만들었는지 (메모용)
+MEMO_HOW = {"취업 가이드": "검색 도구(DB·웹 검색·잡알리오)로 찾은 문서를 읽고 근거 카드를 만들어 추천함",
+            "정보 질문": "검색 도구로 찾은 문서를 읽고 그 내용으로 답함",
+            "후속 질문": "앞 답변의 근거 안에서 답함"}
+# [88] 일반 대화에서 묻지 않은 자기소개. 시스템 프롬프트 첫 줄(ROLE)을 따라 "건양대학교 학생분과 함께…"로 인사함
+SELF_INTRO = re.compile(r"건양대(학교)?\s*학생|상담\s*도우미|도우미입니다|취업\s*(및|과|와)\s*진로|진로(와|와\s*취업|·취업)")
+ASKS_ABOUT_HELPER = re.compile(r"건양|누구|소개|정체")  # 이것을 물을 때만 자기소개를 허용 (도구·기능 질문에도 "상담 도우미입니다"로 시작해서 뺌)
 HISTORY_TURNS = 12          # LLM에 줄 이전 대화 차례 수. 추천 자료(이전 guide)는 이 수와 상관없이 찾는다
 FOLLOWUP_RETRIES = 1
 
@@ -125,6 +135,8 @@ NO_DOCS_FALLBACK = ("찾아본 자료에서는 이 질문에 답할 내용을 �
 COUNSEL_NOTE = "학교 학생상담센터에서 상담 선생님과 이야기를 나눠 보는 것도 권해 드려요. 혼자 정하지 않아도 괜찮아요."
 DOC_REF = re.compile(r"\[(D\d+)\]")
 PRIOR_REF = re.compile(r"\[([CS]\d+)\]")
+# [86] 이전 답변의 출처를 묻는 말. 후속 판단 LLM이 일반 대화로 보내 "추측으로 썼다"고 지어내서 코드가 먼저 후속 질문으로 보낸다
+SOURCE_QUESTION = re.compile(r"출처|어디(서|에서)\s*(가져|찾|나온|나왔|본|봤|얻)|(무슨|어떤|어느)\s*자료|근거(가|는)\s*(뭐|어디|있)|참고한\s*(자료|곳|사이트)")
 GENERIC_TITLES = {"", "신입", "인턴", "경력", "미정", "없음"}
 
 
@@ -132,10 +144,34 @@ def _user_turns(history: list[ChatTurn] | None) -> list[str]:
     return [t.content for t in history or [] if t.role == "user"]
 
 
-def render_history(history: list[ChatTurn] | None) -> str:
-    """LLM용 이전 대화. 최근 HISTORY_TURNS 차례 (9B 모델 입력이 길어지지 않게. 추천 자료는 render_prior가 따로 줌)."""
+def answer_memo(guide: GuideResult | None) -> str:
+    """[87] 도우미 답변을 어떻게 만들었는지 LLM이 기억하게 붙이는 메모. 글만 넘기면 근거 번호만 보고 "추론해서 썼다"고 지어냈다([86]).
+
+    history의 guide에서 만든다(프론트가 받은 guide를 그대로 돌려보내므로 API를 바꿀 필요 없음). tool_calls는 API로 오가지 않아 쓰지 않는다.
+    """
+    if guide is None:
+        return ""
+    if guide.sources:
+        how = MEMO_HOW.get(guide.kind, "앞 답변의 근거 안에서 답함")
+        lines = [f"[이 답변을 만든 방법] {guide.kind}: {how}. 출처는 답변 아래 목록으로 학생에게 보여 줌"]
+        lines += [f"[{e.card_id}] {e.title} · {e.source} · {e.url}" for e in guide.sources[:MEMO_SOURCES]]
+        if len(guide.sources) > MEMO_SOURCES:
+            lines.append(f"(출처 {len(guide.sources) - MEMO_SOURCES}건 더 있음)")
+        return "\n".join(lines)
+    return f"[이 답변을 만든 방법] {guide.kind}: 검색 도구 없이 씀, 출처 없음"
+
+
+def turn_text(t: ChatTurn, memo: bool) -> str:
+    """대화 한 차례의 글. memo면 도우미 차례에 answer_memo를 붙인다."""
+    note = answer_memo(t.guide) if memo and t.role == "assistant" else ""
+    return f"{t.content}\n\n{note}" if note else t.content
+
+
+def render_history(history: list[ChatTurn] | None, memo: bool = False) -> str:
+    """LLM용 이전 대화. 최근 HISTORY_TURNS 차례 (9B 모델 입력이 길어지지 않게. 추천 자료는 render_prior가 따로 줌).
+    memo: [87] 도우미 답변에 만든 방법·출처 메모를 붙임 (대화 정리 LLM에는 안 붙임 — 도우미 추천을 학생 정보로 옮기지 않게)."""
     who = {"user": "학생", "assistant": "도우미"}
-    return "\n".join(f"{who[t.role]}: {t.content}" for t in (history or [])[-HISTORY_TURNS:])
+    return "\n".join(f"{who[t.role]}: {turn_text(t, memo)}" for t in (history or [])[-HISTORY_TURNS:])
 
 
 def crisis_guided(history: list[ChatTurn] | None) -> bool:
@@ -256,6 +292,8 @@ def check_followup(student: StudentInput, prior: GuideResult | None, log=print) 
     question = (student.question or "").strip()
     if prior is None or not question:
         return None
+    if SOURCE_QUESTION.search(question):
+        return RouteDecision(kind="후속 질문", reason="이전 답변의 출처를 물음", question=question, by_code=True)
     try:
         msg = chat([{"role": "system", "content": FOLLOWUP_CHECK_SYSTEM},
                     {"role": "user", "content": FOLLOWUP_CHECK_REQUEST.format(prior=render_prior(prior), question=question)}],
@@ -299,7 +337,7 @@ def _short_text(system: str, request: str) -> str:
 
 
 def _history_block(history: list[ChatTurn] | None) -> str:
-    return f"## 이전 대화\n{render_history(history)}\n\n" if history else ""
+    return f"## 이전 대화\n{render_history(history, memo=True)}\n\n" if history else ""
 
 
 def clarify_answer(student: StudentInput, log=print, history: list[ChatTurn] | None = None) -> GuideResult:
@@ -347,14 +385,17 @@ class InfoAgent:
         self.size = 0                            # 대화에 넣은 본문 합계(자)
         self.calls: list[dict] = []
         self.nudges = 0
+        self.jobs_ok = jobalio.available()       # [84] 잡알리오 키가 있을 때만
 
     def search_tools(self) -> list[str]:
-        return ["search_rag", "search_requirements"] if self.rag_ok else ["search_requirements"]
+        return (["search_rag"] if self.rag_ok else []) + ["search_requirements"] + (["search_public_jobs"] if self.jobs_ok else [])
 
     def tools(self) -> list[dict]:
         specs = [INFO_READ_TOOL_SPEC]
         if not self.guard.exhausted("search_requirements"):
             specs.insert(0, WEB_TOOL_SPEC)
+        if self.jobs_ok and not self.guard.exhausted("search_public_jobs"):
+            specs.insert(0, JOB_TOOL_SPEC)
         if self.rag_ok and not self.guard.exhausted("search_rag"):
             specs.insert(0, RAG_TOOL_SPEC)
         return specs
@@ -376,6 +417,8 @@ class InfoAgent:
                 self.rag_ok = False
                 self.log(f"RAG 검색 실패 — 검색 API로만: {e}")
                 return "DB 검색을 쓸 수 없다. search_requirements를 써.", False
+        elif tool == "search_public_jobs":
+            res = search_public_jobs(query)
         else:
             res = search_requirements(query, per_source=INFO_PER_SOURCE, max_fetch=0)
         nums = self.pool.add(res, INFO_SLOT)
@@ -415,11 +458,11 @@ class InfoAgent:
         return "\n\n".join(parts) + note + f"\n\n{INFO_READ_NEXT}", True
 
     def run_tool(self, name: str, args: dict) -> tuple[str, bool]:
-        if name in ("search_rag", "search_requirements"):
+        if name in self.search_tools():
             return self._search(name, args.get("query"))
         if name == "read_documents":
             return self._read(args.get("docs"))
-        return f"{name}이라는 도구는 없다. search_rag, search_requirements, read_documents 중에서 써.", False
+        return f"{name}이라는 도구는 없다. {', '.join(self.search_tools())}, read_documents 중에서 써.", False
 
     def _on_text(self, _text: str) -> str | None:
         """LLM이 답을 쓰려 함. 문서를 읽지 않았으면 되묻는다. 두 번째는 아직 안 쓴 검색 도구가 있을 때만."""
@@ -585,18 +628,35 @@ def answer_counsel(student: StudentInput, crisis: bool, log=print, history: list
 
 # ---------------------------------------------------------------- 일반 대화
 
+def _tool_lines() -> str:
+    """[83] 일반 대화 프롬프트에 넣을 도구 목록. 실제 도구 정의에서 만들어 프롬프트와 어긋나지 않게 한다."""
+    specs = (RAG_TOOL_SPEC, WEB_TOOL_SPEC, *([JOB_TOOL_SPEC] if jobalio.available() else []), INFO_READ_TOOL_SPEC)
+    return "\n".join(f"- {s['function']['name']}: {s['function']['description']}" for s in specs)
+
+
+TOOLS_ASK = re.compile(r"도구|툴|tool|기능|검색\s*(할\s*수|가능|돼|되)", re.I)
+TOOLS_ASK_NOTE = "\n\n(쓸 수 있는 도구를 묻는 말이면 도구마다 이름과 무엇을 찾는지 목록으로 모두 적어.)"
+CHAT_FIXES = {"한자가 섞임": "\n- 한자를 절대 쓰지 않는다.",
+              "묻지 않은 자기소개": "\n- 학교 이름·학생 호칭·도우미 소개를 넣지 말고 학생의 말에만 짧게 답한다. 예: \"안녕\" → \"안녕하세요! 무엇을 도와드릴까요?\""}
+
+
 def answer_chat(message: str, history: list[ChatTurn] | None, log=print) -> GuideResult:
     """[72] 도구가 필요 없는 말은 모델이 바로 답한다. 이전 대화는 대화 형식 그대로 준다. 출처가 없는 답이라 sources는 비어 있다."""
-    messages = [{"role": "system", "content": CHAT_SYSTEM}]
-    messages += [{"role": t.role, "content": t.content} for t in (history or [])[-HISTORY_TURNS:]]
-    messages.append({"role": "user", "content": message})
+    system = CHAT_SYSTEM.format(tools=_tool_lines())
+    messages = [{"role": "system", "content": system}]
+    messages += [{"role": t.role, "content": turn_text(t, memo=True)} for t in (history or [])[-HISTORY_TURNS:]]  # [87] 만든 방법·출처 메모
+    # [88] 도구를 물으면 이름까지 다 알려 주게 지금 메시지 끝에 한 번 더 적는다 (시스템 프롬프트 규칙만으로는 이름을 빼고 답함)
+    messages.append({"role": "user", "content": message + (TOOLS_ASK_NOTE if TOOLS_ASK.search(message) else "")})
     text, issues, all_issues = "", [], []
     for _ in range(COUNSEL_RETRIES + 1):
         # 다시 쓸 때는 지난 답을 보여 주지 않고 지시만 더한다. 대화로 말하면 "죄송합니다, 방금 답변에는…"이라고 그대로 답한다
-        attempt = [{"role": "system", "content": CHAT_SYSTEM + "\n- 한자를 절대 쓰지 않는다."}, *messages[1:]] if issues else messages
+        fix = "".join(CHAT_FIXES[i] for i in issues if i in CHAT_FIXES)
+        attempt = [{"role": "system", "content": system + fix}, *messages[1:]] if issues else messages
         try:
             text = chat(attempt, CHAT_WRITER)["content"].strip()
             issues = ["한자가 섞임"] if HANJA.search(text) else []
+            if SELF_INTRO.search(text) and not ASKS_ABOUT_HELPER.search(message):  # [88]
+                issues.append("묻지 않은 자기소개")
         except Exception as e:
             log(f"일반 대화 실패: {type(e).__name__}")
             issues = [f"일반 대화 실패 ({type(e).__name__})"]
@@ -616,6 +676,11 @@ def _prior_evidence(guide: GuideResult) -> dict[str, GuideEvidence]:
     return {e.card_id: e for e in [*guide.sources, *(e for it in items for e in it.evidence)]}
 
 
+def _prior_line(e: GuideEvidence) -> str:
+    """[86] 출처를 물으면 링크까지 답하도록 제목·출처 구분·링크를 함께 준다."""
+    return f"   [{e.card_id}] {e.quote} (출처: {e.title} · {e.source} · {e.url})"
+
+
 def render_prior(guide: GuideResult) -> str:
     """후속 답변 LLM 입력: 이전 답변 글 + 추천 항목·근거 인용 전체."""
     lines = [f"[이전 답변 글]\n{guide.answer}"]
@@ -628,15 +693,15 @@ def render_prior(guide: GuideResult) -> str:
             if it.deadline:
                 extra.append(f"마감일: {it.deadline} ({it.deadline_status})")
             lines.append(f"{it.rank}. {it.title} — " + " / ".join(extra))
-            lines += [f"   [{e.card_id}] {e.quote} (출처: {e.title})" for e in it.evidence]
+            lines += [_prior_line(e) for e in it.evidence]
     if guide.past:
         lines.append("\n[지난 회차 — 추천 아님]")
         for it in guide.past:
             lines.append(f"- {it.title} (마감일: {it.deadline})")
-            lines += [f"   [{e.card_id}] {e.quote} (출처: {e.title})" for e in it.evidence]
+            lines += [_prior_line(e) for e in it.evidence]
     if not guide.sections:
         lines.append("\n[출처]")
-        lines += [f"[{e.card_id}] {e.quote} (출처: {e.title})" for e in guide.sources]
+        lines += [_prior_line(e).strip() for e in guide.sources]
     return "\n".join(lines)
 
 
@@ -674,5 +739,8 @@ def answer_followup(question: str, history: list[ChatTurn] | None, log=print) ->
     if by_code:
         text = "이전 답변 자료만으로는 확실히 답하기 어려워요. 궁금한 점을 조금 더 구체적으로 알려 주시면 새로 찾아볼게요."
     order = list(dict.fromkeys(PRIOR_REF.findall(text)))
-    return GuideResult(kind="후속 질문", job_title=guide.job_title, answer=text, sources=[evidence[c] for c in order],
+    sources = [evidence[c] for c in order]
+    if SOURCE_QUESTION.search(question):  # [86] 출처를 물으면 글에 번호를 일부만 적어도 이전 답변의 출처를 모두 붙인다
+        sources += [e for e in guide.sources if e.card_id not in order]
+    return GuideResult(kind="후속 질문", job_title=guide.job_title, answer=text, sources=sources,
                        answer_by_code=by_code, answer_issues=all_issues, summary=text.split("\n\n")[0], sections=[], held=[], lacking=[])

@@ -102,7 +102,7 @@ def run_tool_loop(
 class SearchGuard:
     """검색 기록. ran(같은 검색 차단)은 실행 전체에, 나머지는 대화 하나에 적용한다."""
 
-    SEARCH_TOOLS = ("search_rag", "search_requirements")
+    SEARCH_TOOLS = ("search_rag", "search_requirements", "search_public_jobs")
 
     def __init__(self):
         self.ran: set[tuple[str, str]] = set()
