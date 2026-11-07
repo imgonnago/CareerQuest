@@ -1,0 +1,194 @@
+﻿decision,review_note,department,course_resource_id,course_name,skill_id,skill_name,match_reason
+HOLD,핵의학 관련 실습·검사 과목이지만 실제 영상획득 중심인지 불확실하여 학습목표 확인 필요.,의학과,310,방사선종양학과/핵의학실습,204,핵의학 영상검사,2026_CURRICULUM_TOPIC
+APPROVE,과목명에 의료윤리가 명시되어 보건의료 윤리 역량과 직접 관련됨. RELATED만 승인.,의학과,268,프로페셔널리즘Ⅲ (사회적책무와의료윤리),48,의료윤리,SKILL_NAME_OR_ALIAS_IN_TITLE
+APPROVE,지역사회간호학 교과목과 임상·보건 분야가 명확히 일치함. RELATED만 승인.,간호학과,396,지역사회간호학실습,203,지역사회 간호,2026_CURRICULUM_TOPIC
+APPROVE,클라우드컴퓨팅 과목과 클라우드 기초 지식이 직접 관련됨. 인프라 구축 숙련도로 판단하지 않음.,간호학과,342,클라우드컴퓨팅이해,36,Cloud,SKILL_NAME_OR_ALIAS_IN_TITLE
+APPROVE,문제해결을 명시한 과목으로 문제 해결 역량과 직접 관련됨. 구체적 수준은 미확인.,간호학과,327,컴퓨팅 사고력과 문제해결력,44,Problem Solving,SKILL_NAME_OR_ALIAS_IN_TITLE
+APPROVE,데이터 분석을 직접 다루는 과목명으로 관련성이 명확함. 분석 실무 능력은 별도 검증.,간호학과,335,데이터 분석 기초,18,Data Analysis,SKILL_NAME_OR_ALIAS_IN_TITLE
+APPROVE,데이터 분석을 직접 다루는 과목명으로 관련성이 명확함. 분석 실무 능력은 별도 검증.,간호학과,328,데이터 분석 입문,18,Data Analysis,SKILL_NAME_OR_ALIAS_IN_TITLE
+APPROVE,알고리즘을 명시한 교과목으로 이론·구현 주제가 관련됨. 관련성만 인정.,간호학과,337,파이썬 기반 자료구조와 알고리즘,38,Algorithm,SKILL_NAME_OR_ALIAS_IN_TITLE
+APPROVE,자료구조를 명시한 교과목으로 자료구조 기초 역량과 직접 관련됨. RELATED만 승인.,간호학과,337,파이썬 기반 자료구조와 알고리즘,39,Data Structure,SKILL_NAME_OR_ALIAS_IN_TITLE
+APPROVE,여성건강간호학 교과목과 대상자·주제가 일치함. 이수 기반 역량 획득 판정 없이 관련성만 승인.,간호학과,382,여성건강간호학실습Ⅰ,201,여성건강 간호,2026_CURRICULUM_TOPIC
+APPROVE,아동간호학의 대상자·임상 영역과 연결됨. 실습 숙련도는 별도 검증이 필요함.,간호학과,374,아동간호학실습Ⅰ,202,아동 간호,2026_CURRICULUM_TOPIC
+APPROVE,여성건강간호학 교과목과 대상자·주제가 일치함. 이수 기반 역량 획득 판정 없이 관련성만 승인.,간호학과,372,여성건강간호학Ⅰ,201,여성건강 간호,2026_CURRICULUM_TOPIC
+APPROVE,정신간호학 교과목명과 정신건강 간호 분야가 명확히 대응됨. 이수만으로 실무 수행 능력을 인정하지 않음.,간호학과,388,정신간호학실습Ⅰ,200,정신건강 간호,2026_CURRICULUM_TOPIC
+APPROVE,지역사회간호학 교과목과 임상·보건 분야가 명확히 일치함. RELATED만 승인.,간호학과,376,지역사회간호학Ⅰ,203,지역사회 간호,2026_CURRICULUM_TOPIC
+APPROVE,아동간호학의 대상자·임상 영역과 연결됨. 실습 숙련도는 별도 검증이 필요함.,간호학과,364,아동간호학Ⅰ,202,아동 간호,2026_CURRICULUM_TOPIC
+APPROVE,정신간호학 교과목명과 정신건강 간호 분야가 명확히 대응됨. 이수만으로 실무 수행 능력을 인정하지 않음.,간호학과,375,정신간호학Ⅰ,200,정신건강 간호,2026_CURRICULUM_TOPIC
+APPROVE,여성건강간호학 교과목과 대상자·주제가 일치함. 이수 기반 역량 획득 판정 없이 관련성만 승인.,간호학과,386,여성건강간호학실습Ⅱ,201,여성건강 간호,2026_CURRICULUM_TOPIC
+APPROVE,아동간호학의 대상자·임상 영역과 연결됨. 실습 숙련도는 별도 검증이 필요함.,간호학과,381,아동간호학실습Ⅱ,202,아동 간호,2026_CURRICULUM_TOPIC
+APPROVE,여성건강간호학 교과목과 대상자·주제가 일치함. 이수 기반 역량 획득 판정 없이 관련성만 승인.,간호학과,378,여성건강간호학Ⅱ,201,여성건강 간호,2026_CURRICULUM_TOPIC
+APPROVE,정신간호학 교과목명과 정신건강 간호 분야가 명확히 대응됨. 이수만으로 실무 수행 능력을 인정하지 않음.,간호학과,395,정신간호학실습Ⅱ,200,정신건강 간호,2026_CURRICULUM_TOPIC
+APPROVE,지역사회간호학 교과목과 임상·보건 분야가 명확히 일치함. RELATED만 승인.,간호학과,383,지역사회간호학Ⅱ,203,지역사회 간호,2026_CURRICULUM_TOPIC
+APPROVE,아동간호학의 대상자·임상 영역과 연결됨. 실습 숙련도는 별도 검증이 필요함.,간호학과,371,아동간호학Ⅱ,202,아동 간호,2026_CURRICULUM_TOPIC
+APPROVE,정신간호학 교과목명과 정신건강 간호 분야가 명확히 대응됨. 이수만으로 실무 수행 능력을 인정하지 않음.,간호학과,384,정신간호학Ⅱ,200,정신건강 간호,2026_CURRICULUM_TOPIC
+APPROVE,Java 언어를 명시한 교과목으로 언어 관련성이 명확함. 숙련도는 별도로 판단.,간호학과,334,JAVA 프로그래밍,2,Java,SKILL_NAME_OR_ALIAS_IN_TITLE
+APPROVE,원본 과목명의 깨진 문자(柴)는 후속 정정 필요. 문제해결 표현 자체는 분명함.,간호학과,346,SGD柴지역사회문제해결Ⅰ,44,Problem Solving,SKILL_NAME_OR_ALIAS_IN_TITLE
+APPROVE,원본 과목명의 깨진 문자(柴)는 후속 정정 필요. 문제해결 표현 자체는 분명함.,간호학과,348,SGD柴지역사회문제해결Ⅱ,44,Problem Solving,SKILL_NAME_OR_ALIAS_IN_TITLE
+APPROVE,알고리즘을 명시한 교과목으로 이론·구현 주제가 관련됨. 관련성만 인정.,의공학과,1145,알고리즘,38,Algorithm,SKILL_NAME_OR_ALIAS_IN_TITLE
+APPROVE,자료구조를 명시한 교과목으로 자료구조 기초 역량과 직접 관련됨. RELATED만 승인.,의공학과,1143,자료구조,39,Data Structure,SKILL_NAME_OR_ALIAS_IN_TITLE
+APPROVE,데이터베이스 또는 DB 프로그래밍 교과목으로 DB 지식과 직접 관련됨. RELATED만 승인.,의공학과,1139,데이터베이스,14,Database,SKILL_NAME_OR_ALIAS_IN_TITLE
+APPROVE,딥러닝 영상처리는 컴퓨터비전과 직접 관련됨. 이미지 AI의 세부 태스크·숙련도까지 인정하지는 않음.,의공학과,1189,딥러닝영상처리,29,Computer Vision,SKILL_NAME_OR_ALIAS_IN_TITLE
+APPROVE,컴퓨터네트워크 과목과 네트워크 지식이 명확히 관련됨. RELATED만 승인.,의공학과,1146,컴퓨터네트워크,43,Computer Network,SKILL_NAME_OR_ALIAS_IN_TITLE
+APPROVE,클라우드컴퓨팅 과목과 클라우드 기초 지식이 직접 관련됨. 인프라 구축 숙련도로 판단하지 않음.,의공학과,1185,클라우드컴퓨팅,36,Cloud,SKILL_NAME_OR_ALIAS_IN_TITLE
+APPROVE,딥러닝 자연어처리 과목과 NLP 분야가 직접 연결됨. RELATED만 승인.,의공학과,1192,딥러닝자연어처리,28,Natural Language Processing,SKILL_NAME_OR_ALIAS_IN_TITLE
+APPROVE,머신러닝을 명시한 과목으로 Machine Learning과 직접 연결됨. RELATED만 승인.,의공학과,1180,머신러닝및딥러닝,22,Machine Learning,SKILL_NAME_OR_ALIAS_IN_TITLE
+APPROVE,생체신호계측공학 과목과 계측 역량의 주제가 직접 일치함. RELATED만 승인.,의공학과,1109,생체신호계측공학,146,생체신호 계측,SKILL_NAME_OR_ALIAS_IN_TITLE
+APPROVE,클라우드컴퓨팅 과목과 클라우드 기초 지식이 직접 관련됨. 인프라 구축 숙련도로 판단하지 않음.,의공학과,1052,클라우드컴퓨팅이해,36,Cloud,SKILL_NAME_OR_ALIAS_IN_TITLE
+HOLD,일반 영상처리/의료영상처리만으로 Computer Vision의 객체 인식·영상 이해까지 포함한다고 단정할 수 없음. 강의계획서 확인.,의공학과,1114,의료영상학및영상처리,29,Computer Vision,SKILL_NAME_OR_ALIAS_IN_TITLE
+APPROVE,데이터베이스 또는 DB 프로그래밍 교과목으로 DB 지식과 직접 관련됨. RELATED만 승인.,의공학과,1181,데이터베이스프로그래밍,14,Database,SKILL_NAME_OR_ALIAS_IN_TITLE
+APPROVE,데이터 분석을 직접 다루는 과목명으로 관련성이 명확함. 분석 실무 능력은 별도 검증.,의공학과,1193,의료영상신호데이터분석,18,Data Analysis,SKILL_NAME_OR_ALIAS_IN_TITLE
+APPROVE,문제해결을 명시한 과목으로 문제 해결 역량과 직접 관련됨. 구체적 수준은 미확인.,의공학과,1059,창의융합적사고를 통한 사회문제해결,44,Problem Solving,SKILL_NAME_OR_ALIAS_IN_TITLE
+APPROVE,문제해결을 명시한 과목으로 문제 해결 역량과 직접 관련됨. 구체적 수준은 미확인.,의공학과,1037,컴퓨팅 사고력과 문제해결력,44,Problem Solving,SKILL_NAME_OR_ALIAS_IN_TITLE
+APPROVE,데이터 분석을 직접 다루는 과목명으로 관련성이 명확함. 분석 실무 능력은 별도 검증.,의공학과,1045,데이터 분석 기초,18,Data Analysis,SKILL_NAME_OR_ALIAS_IN_TITLE
+APPROVE,데이터 분석을 직접 다루는 과목명으로 관련성이 명확함. 분석 실무 능력은 별도 검증.,의공학과,1038,데이터 분석 입문,18,Data Analysis,SKILL_NAME_OR_ALIAS_IN_TITLE
+APPROVE,알고리즘을 명시한 교과목으로 이론·구현 주제가 관련됨. 관련성만 인정.,의공학과,1047,파이썬 기반 자료구조와 알고리즘,38,Algorithm,SKILL_NAME_OR_ALIAS_IN_TITLE
+APPROVE,자료구조를 명시한 교과목으로 자료구조 기초 역량과 직접 관련됨. RELATED만 승인.,의공학과,1047,파이썬 기반 자료구조와 알고리즘,39,Data Structure,SKILL_NAME_OR_ALIAS_IN_TITLE
+APPROVE,알고리즘을 명시한 교과목으로 이론·구현 주제가 관련됨. 관련성만 인정.,의공학과,1186,AI를위한알고리즘,38,Algorithm,SKILL_NAME_OR_ALIAS_IN_TITLE
+APPROVE,EMR 데이터 분석 과목으로 Data Analysis와 직접 관련됨. 의료데이터 특수 역량은 추가 후보로 분리.,의공학과,1190,EMR데이터분석,18,Data Analysis,SKILL_NAME_OR_ALIAS_IN_TITLE
+APPROVE,Java 언어를 명시한 교과목으로 언어 관련성이 명확함. 숙련도는 별도로 판단.,의공학과,1141,JAVA,2,Java,SKILL_NAME_OR_ALIAS_IN_TITLE
+APPROVE,Java 언어를 명시한 교과목으로 언어 관련성이 명확함. 숙련도는 별도로 판단.,의공학과,1182,JAVA프로그래밍,2,Java,SKILL_NAME_OR_ALIAS_IN_TITLE
+APPROVE,Java 언어를 명시한 교과목으로 언어 관련성이 명확함. 숙련도는 별도로 판단.,의공학과,1044,JAVA 프로그래밍,2,Java,SKILL_NAME_OR_ALIAS_IN_TITLE
+APPROVE,원본 과목명의 깨진 문자(柴)는 후속 정정 필요. 문제해결 표현 자체는 분명함.,의공학과,1031,SGD柴지역사회문제해결Ⅰ,44,Problem Solving,SKILL_NAME_OR_ALIAS_IN_TITLE
+APPROVE,원본 과목명의 깨진 문자(柴)는 후속 정정 필요. 문제해결 표현 자체는 분명함.,의공학과,1034,SGD柴지역사회문제해결Ⅱ,44,Problem Solving,SKILL_NAME_OR_ALIAS_IN_TITLE
+APPROVE,핵의학 관련 교과목과 의료영상검사 분야가 연결됨. 세부 촬영·진단 절차의 숙련은 미확인.,방사선학과,746,핵의학기술학,204,핵의학 영상검사,2026_CURRICULUM_TOPIC
+HOLD,일반 영상처리/의료영상처리만으로 Computer Vision의 객체 인식·영상 이해까지 포함한다고 단정할 수 없음. 강의계획서 확인.,방사선학과,728,디지털영상처리,29,Computer Vision,SKILL_NAME_OR_ALIAS_IN_TITLE
+APPROVE,클라우드컴퓨팅 과목과 클라우드 기초 지식이 직접 관련됨. 인프라 구축 숙련도로 판단하지 않음.,방사선학과,718,클라우드컴퓨팅이해,36,Cloud,SKILL_NAME_OR_ALIAS_IN_TITLE
+APPROVE,기본소생술 및 응급처치 과목의 기본소생술 부분과 관련됨. 인증·실기 숙련을 의미하지 않음.,방사선학과,778,기본소생술 및 응급처치,129,기본심폐소생술,SKILL_NAME_OR_ALIAS_IN_TITLE
+APPROVE,문제해결을 명시한 과목으로 문제 해결 역량과 직접 관련됨. 구체적 수준은 미확인.,방사선학과,703,컴퓨팅 사고력과 문제해결력,44,Problem Solving,SKILL_NAME_OR_ALIAS_IN_TITLE
+APPROVE,데이터 분석을 직접 다루는 과목명으로 관련성이 명확함. 분석 실무 능력은 별도 검증.,방사선학과,711,데이터 분석 기초,18,Data Analysis,SKILL_NAME_OR_ALIAS_IN_TITLE
+APPROVE,데이터 분석을 직접 다루는 과목명으로 관련성이 명확함. 분석 실무 능력은 별도 검증.,방사선학과,704,데이터 분석 입문,18,Data Analysis,SKILL_NAME_OR_ALIAS_IN_TITLE
+APPROVE,알고리즘을 명시한 교과목으로 이론·구현 주제가 관련됨. 관련성만 인정.,방사선학과,713,파이썬 기반 자료구조와 알고리즘,38,Algorithm,SKILL_NAME_OR_ALIAS_IN_TITLE
+APPROVE,자료구조를 명시한 교과목으로 자료구조 기초 역량과 직접 관련됨. RELATED만 승인.,방사선학과,713,파이썬 기반 자료구조와 알고리즘,39,Data Structure,SKILL_NAME_OR_ALIAS_IN_TITLE
+APPROVE,Java 언어를 명시한 교과목으로 언어 관련성이 명확함. 숙련도는 별도로 판단.,방사선학과,710,JAVA 프로그래밍,2,Java,SKILL_NAME_OR_ALIAS_IN_TITLE
+APPROVE,원본 과목명의 깨진 문자(柴)는 후속 정정 필요. 문제해결 표현 자체는 분명함.,방사선학과,698,SGD柴지역사회문제해결Ⅰ,44,Problem Solving,SKILL_NAME_OR_ALIAS_IN_TITLE
+APPROVE,원본 과목명의 깨진 문자(柴)는 후속 정정 필요. 문제해결 표현 자체는 분명함.,방사선학과,700,SGD柴지역사회문제해결Ⅱ,44,Problem Solving,SKILL_NAME_OR_ALIAS_IN_TITLE
+APPROVE,클라우드컴퓨팅 과목과 클라우드 기초 지식이 직접 관련됨. 인프라 구축 숙련도로 판단하지 않음.,안경광학과,559,클라우드컴퓨팅이해,36,Cloud,SKILL_NAME_OR_ALIAS_IN_TITLE
+APPROVE,문제해결을 명시한 과목으로 문제 해결 역량과 직접 관련됨. 구체적 수준은 미확인.,안경광학과,544,컴퓨팅 사고력과 문제해결력,44,Problem Solving,SKILL_NAME_OR_ALIAS_IN_TITLE
+APPROVE,데이터 분석을 직접 다루는 과목명으로 관련성이 명확함. 분석 실무 능력은 별도 검증.,안경광학과,552,데이터 분석 기초,18,Data Analysis,SKILL_NAME_OR_ALIAS_IN_TITLE
+APPROVE,데이터 분석을 직접 다루는 과목명으로 관련성이 명확함. 분석 실무 능력은 별도 검증.,안경광학과,545,데이터 분석 입문,18,Data Analysis,SKILL_NAME_OR_ALIAS_IN_TITLE
+APPROVE,알고리즘을 명시한 교과목으로 이론·구현 주제가 관련됨. 관련성만 인정.,안경광학과,554,파이썬 기반 자료구조와 알고리즘,38,Algorithm,SKILL_NAME_OR_ALIAS_IN_TITLE
+APPROVE,자료구조를 명시한 교과목으로 자료구조 기초 역량과 직접 관련됨. RELATED만 승인.,안경광학과,554,파이썬 기반 자료구조와 알고리즘,39,Data Structure,SKILL_NAME_OR_ALIAS_IN_TITLE
+APPROVE,Java 언어를 명시한 교과목으로 언어 관련성이 명확함. 숙련도는 별도로 판단.,안경광학과,551,JAVA 프로그래밍,2,Java,SKILL_NAME_OR_ALIAS_IN_TITLE
+APPROVE,원본 과목명의 깨진 문자(柴)는 후속 정정 필요. 문제해결 표현 자체는 분명함.,안경광학과,539,SGD柴지역사회문제해결Ⅰ,44,Problem Solving,SKILL_NAME_OR_ALIAS_IN_TITLE
+APPROVE,원본 과목명의 깨진 문자(柴)는 후속 정정 필요. 문제해결 표현 자체는 분명함.,안경광학과,541,SGD柴지역사회문제해결Ⅱ,44,Problem Solving,SKILL_NAME_OR_ALIAS_IN_TITLE
+APPROVE,클라우드컴퓨팅 과목과 클라우드 기초 지식이 직접 관련됨. 인프라 구축 숙련도로 판단하지 않음.,치위생학과,819,클라우드컴퓨팅이해,36,Cloud,SKILL_NAME_OR_ALIAS_IN_TITLE
+APPROVE,구강보건교육학 및 실습이 교육 역량과 직접 관련됨. RELATED만 승인.,치위생학과,851,구강보건교육학및실습(종합설계),119,구강보건 교육,SKILL_NAME_OR_ALIAS_IN_TITLE
+APPROVE,기본소생술 및 응급처치 과목의 기본소생술 부분과 관련됨. 인증·실기 숙련을 의미하지 않음.,치위생학과,877,기본소생술 및 응급처치,129,기본심폐소생술,SKILL_NAME_OR_ALIAS_IN_TITLE
+APPROVE,문제해결을 명시한 과목으로 문제 해결 역량과 직접 관련됨. 구체적 수준은 미확인.,치위생학과,804,컴퓨팅 사고력과 문제해결력,44,Problem Solving,SKILL_NAME_OR_ALIAS_IN_TITLE
+APPROVE,데이터 분석을 직접 다루는 과목명으로 관련성이 명확함. 분석 실무 능력은 별도 검증.,치위생학과,812,데이터 분석 기초,18,Data Analysis,SKILL_NAME_OR_ALIAS_IN_TITLE
+APPROVE,데이터 분석을 직접 다루는 과목명으로 관련성이 명확함. 분석 실무 능력은 별도 검증.,치위생학과,805,데이터 분석 입문,18,Data Analysis,SKILL_NAME_OR_ALIAS_IN_TITLE
+APPROVE,알고리즘을 명시한 교과목으로 이론·구현 주제가 관련됨. 관련성만 인정.,치위생학과,814,파이썬 기반 자료구조와 알고리즘,38,Algorithm,SKILL_NAME_OR_ALIAS_IN_TITLE
+APPROVE,자료구조를 명시한 교과목으로 자료구조 기초 역량과 직접 관련됨. RELATED만 승인.,치위생학과,814,파이썬 기반 자료구조와 알고리즘,39,Data Structure,SKILL_NAME_OR_ALIAS_IN_TITLE
+APPROVE,Java 언어를 명시한 교과목으로 언어 관련성이 명확함. 숙련도는 별도로 판단.,치위생학과,811,JAVA 프로그래밍,2,Java,SKILL_NAME_OR_ALIAS_IN_TITLE
+APPROVE,지역사회문제해결 과목과 Problem Solving은 직접 관련됨. RELATED로만 승인.,치위생학과,798,SGD･지역사회문제해결Ⅰ,44,Problem Solving,SKILL_NAME_OR_ALIAS_IN_TITLE
+APPROVE,지역사회문제해결 과목과 Problem Solving은 직접 관련됨. RELATED로만 승인.,치위생학과,801,SGD･지역사회문제해결Ⅱ,44,Problem Solving,SKILL_NAME_OR_ALIAS_IN_TITLE
+APPROVE,클라우드컴퓨팅 과목과 클라우드 기초 지식이 직접 관련됨. 인프라 구축 숙련도로 판단하지 않음.,물리치료학과,906,클라우드컴퓨팅이해,36,Cloud,SKILL_NAME_OR_ALIAS_IN_TITLE
+APPROVE,노인 대상 물리·작업치료 과목과 노인 재활 분야가 명확히 관련됨. 실기 숙련은 미확인.,물리치료학과,940,노인물리치료학 및 실습(종합설계),205,노인 재활,2026_CURRICULUM_TOPIC
+APPROVE,문제해결을 명시한 과목으로 문제 해결 역량과 직접 관련됨. 구체적 수준은 미확인.,물리치료학과,891,컴퓨팅 사고력과 문제해결력,44,Problem Solving,SKILL_NAME_OR_ALIAS_IN_TITLE
+APPROVE,데이터 분석을 직접 다루는 과목명으로 관련성이 명확함. 분석 실무 능력은 별도 검증.,물리치료학과,899,데이터 분석 기초,18,Data Analysis,SKILL_NAME_OR_ALIAS_IN_TITLE
+APPROVE,데이터 분석을 직접 다루는 과목명으로 관련성이 명확함. 분석 실무 능력은 별도 검증.,물리치료학과,892,데이터 분석 입문,18,Data Analysis,SKILL_NAME_OR_ALIAS_IN_TITLE
+APPROVE,알고리즘을 명시한 교과목으로 이론·구현 주제가 관련됨. 관련성만 인정.,물리치료학과,901,파이썬 기반 자료구조와 알고리즘,38,Algorithm,SKILL_NAME_OR_ALIAS_IN_TITLE
+APPROVE,자료구조를 명시한 교과목으로 자료구조 기초 역량과 직접 관련됨. RELATED만 승인.,물리치료학과,901,파이썬 기반 자료구조와 알고리즘,39,Data Structure,SKILL_NAME_OR_ALIAS_IN_TITLE
+APPROVE,Java 언어를 명시한 교과목으로 언어 관련성이 명확함. 숙련도는 별도로 판단.,물리치료학과,898,JAVA 프로그래밍,2,Java,SKILL_NAME_OR_ALIAS_IN_TITLE
+APPROVE,원본 과목명의 깨진 문자(柴)는 후속 정정 필요. 문제해결 표현 자체는 분명함.,물리치료학과,885,SGD柴지역사회문제해결Ⅰ,44,Problem Solving,SKILL_NAME_OR_ALIAS_IN_TITLE
+APPROVE,원본 과목명의 깨진 문자(柴)는 후속 정정 필요. 문제해결 표현 자체는 분명함.,물리치료학과,888,SGD柴지역사회문제해결Ⅱ,44,Problem Solving,SKILL_NAME_OR_ALIAS_IN_TITLE
+APPROVE,클라우드컴퓨팅 과목과 클라우드 기초 지식이 직접 관련됨. 인프라 구축 숙련도로 판단하지 않음.,병원경영학과,490,클라우드컴퓨팅이해,36,Cloud,SKILL_NAME_OR_ALIAS_IN_TITLE
+APPROVE,문제해결을 명시한 과목으로 문제 해결 역량과 직접 관련됨. 구체적 수준은 미확인.,병원경영학과,475,컴퓨팅 사고력과 문제해결력,44,Problem Solving,SKILL_NAME_OR_ALIAS_IN_TITLE
+APPROVE,데이터 분석을 직접 다루는 과목명으로 관련성이 명확함. 분석 실무 능력은 별도 검증.,병원경영학과,483,데이터 분석 기초,18,Data Analysis,SKILL_NAME_OR_ALIAS_IN_TITLE
+APPROVE,데이터 분석을 직접 다루는 과목명으로 관련성이 명확함. 분석 실무 능력은 별도 검증.,병원경영학과,476,데이터 분석 입문,18,Data Analysis,SKILL_NAME_OR_ALIAS_IN_TITLE
+APPROVE,알고리즘을 명시한 교과목으로 이론·구현 주제가 관련됨. 관련성만 인정.,병원경영학과,485,파이썬 기반 자료구조와 알고리즘,38,Algorithm,SKILL_NAME_OR_ALIAS_IN_TITLE
+APPROVE,자료구조를 명시한 교과목으로 자료구조 기초 역량과 직접 관련됨. RELATED만 승인.,병원경영학과,485,파이썬 기반 자료구조와 알고리즘,39,Data Structure,SKILL_NAME_OR_ALIAS_IN_TITLE
+APPROVE,Java 언어를 명시한 교과목으로 언어 관련성이 명확함. 숙련도는 별도로 판단.,병원경영학과,482,JAVA 프로그래밍,2,Java,SKILL_NAME_OR_ALIAS_IN_TITLE
+APPROVE,원본 과목명의 깨진 문자(柴)는 후속 정정 필요. 문제해결 표현 자체는 분명함.,병원경영학과,494,SGD柴지역사회문제해결Ⅰ,44,Problem Solving,SKILL_NAME_OR_ALIAS_IN_TITLE
+APPROVE,원본 과목명의 깨진 문자(柴)는 후속 정정 필요. 문제해결 표현 자체는 분명함.,병원경영학과,496,SGD柴지역사회문제해결Ⅱ,44,Problem Solving,SKILL_NAME_OR_ALIAS_IN_TITLE
+APPROVE,클라우드컴퓨팅 과목과 클라우드 기초 지식이 직접 관련됨. 인프라 구축 숙련도로 판단하지 않음.,응급구조학과,979,클라우드컴퓨팅이해,36,Cloud,SKILL_NAME_OR_ALIAS_IN_TITLE
+APPROVE,기본소생술 및 응급처치 과목의 기본소생술 부분과 관련됨. 인증·실기 숙련을 의미하지 않음.,응급구조학과,985,기본소생술 및 응급처치,129,기본심폐소생술,SKILL_NAME_OR_ALIAS_IN_TITLE
+APPROVE,문제해결을 명시한 과목으로 문제 해결 역량과 직접 관련됨. 구체적 수준은 미확인.,응급구조학과,964,컴퓨팅 사고력과 문제해결력,44,Problem Solving,SKILL_NAME_OR_ALIAS_IN_TITLE
+APPROVE,데이터 분석을 직접 다루는 과목명으로 관련성이 명확함. 분석 실무 능력은 별도 검증.,응급구조학과,972,데이터 분석 기초,18,Data Analysis,SKILL_NAME_OR_ALIAS_IN_TITLE
+APPROVE,데이터 분석을 직접 다루는 과목명으로 관련성이 명확함. 분석 실무 능력은 별도 검증.,응급구조학과,965,데이터 분석 입문,18,Data Analysis,SKILL_NAME_OR_ALIAS_IN_TITLE
+APPROVE,알고리즘을 명시한 교과목으로 이론·구현 주제가 관련됨. 관련성만 인정.,응급구조학과,974,파이썬 기반 자료구조와 알고리즘,38,Algorithm,SKILL_NAME_OR_ALIAS_IN_TITLE
+APPROVE,자료구조를 명시한 교과목으로 자료구조 기초 역량과 직접 관련됨. RELATED만 승인.,응급구조학과,974,파이썬 기반 자료구조와 알고리즘,39,Data Structure,SKILL_NAME_OR_ALIAS_IN_TITLE
+APPROVE,Java 언어를 명시한 교과목으로 언어 관련성이 명확함. 숙련도는 별도로 판단.,응급구조학과,971,JAVA 프로그래밍,2,Java,SKILL_NAME_OR_ALIAS_IN_TITLE
+APPROVE,원본 과목명의 깨진 문자(柴)는 후속 정정 필요. 문제해결 표현 자체는 분명함.,응급구조학과,959,SGD柴지역사회문제해결Ⅰ,44,Problem Solving,SKILL_NAME_OR_ALIAS_IN_TITLE
+APPROVE,원본 과목명의 깨진 문자(柴)는 후속 정정 필요. 문제해결 표현 자체는 분명함.,응급구조학과,961,SGD柴지역사회문제해결Ⅱ,44,Problem Solving,SKILL_NAME_OR_ALIAS_IN_TITLE
+HOLD,핵의학 관련 실습·검사 과목이지만 실제 영상획득 중심인지 불확실하여 학습목표 확인 필요.,임상병리학과,663,핵의학검사기술학,204,핵의학 영상검사,2026_CURRICULUM_TOPIC
+APPROVE,클라우드컴퓨팅 과목과 클라우드 기초 지식이 직접 관련됨. 인프라 구축 숙련도로 판단하지 않음.,임상병리학과,622,클라우드컴퓨팅이해,36,Cloud,SKILL_NAME_OR_ALIAS_IN_TITLE
+APPROVE,기본소생술 및 응급처치 과목의 기본소생술 부분과 관련됨. 인증·실기 숙련을 의미하지 않음.,임상병리학과,690,기본소생술 및 응급처치,129,기본심폐소생술,SKILL_NAME_OR_ALIAS_IN_TITLE
+APPROVE,문제해결을 명시한 과목으로 문제 해결 역량과 직접 관련됨. 구체적 수준은 미확인.,임상병리학과,607,컴퓨팅 사고력과 문제해결력,44,Problem Solving,SKILL_NAME_OR_ALIAS_IN_TITLE
+APPROVE,데이터 분석을 직접 다루는 과목명으로 관련성이 명확함. 분석 실무 능력은 별도 검증.,임상병리학과,615,데이터 분석 기초,18,Data Analysis,SKILL_NAME_OR_ALIAS_IN_TITLE
+APPROVE,데이터 분석을 직접 다루는 과목명으로 관련성이 명확함. 분석 실무 능력은 별도 검증.,임상병리학과,608,데이터 분석 입문,18,Data Analysis,SKILL_NAME_OR_ALIAS_IN_TITLE
+APPROVE,알고리즘을 명시한 교과목으로 이론·구현 주제가 관련됨. 관련성만 인정.,임상병리학과,617,파이썬 기반 자료구조와 알고리즘,38,Algorithm,SKILL_NAME_OR_ALIAS_IN_TITLE
+APPROVE,자료구조를 명시한 교과목으로 자료구조 기초 역량과 직접 관련됨. RELATED만 승인.,임상병리학과,617,파이썬 기반 자료구조와 알고리즘,39,Data Structure,SKILL_NAME_OR_ALIAS_IN_TITLE
+APPROVE,Java 언어를 명시한 교과목으로 언어 관련성이 명확함. 숙련도는 별도로 판단.,임상병리학과,614,JAVA 프로그래밍,2,Java,SKILL_NAME_OR_ALIAS_IN_TITLE
+APPROVE,원본 과목명의 깨진 문자(柴)는 후속 정정 필요. 문제해결 표현 자체는 분명함.,임상병리학과,602,SGD柴지역사회문제해결Ⅰ,44,Problem Solving,SKILL_NAME_OR_ALIAS_IN_TITLE
+APPROVE,원본 과목명의 깨진 문자(柴)는 후속 정정 필요. 문제해결 표현 자체는 분명함.,임상병리학과,604,SGD柴지역사회문제해결Ⅱ,44,Problem Solving,SKILL_NAME_OR_ALIAS_IN_TITLE
+APPROVE,노인 대상 물리·작업치료 과목과 노인 재활 분야가 명확히 관련됨. 실기 숙련은 미확인.,작업치료학과,467,노인작업치료학,205,노인 재활,2026_CURRICULUM_TOPIC
+APPROVE,클라우드컴퓨팅 과목과 클라우드 기초 지식이 직접 관련됨. 인프라 구축 숙련도로 판단하지 않음.,작업치료학과,423,클라우드컴퓨팅이해,36,Cloud,SKILL_NAME_OR_ALIAS_IN_TITLE
+APPROVE,문제해결을 명시한 과목으로 문제 해결 역량과 직접 관련됨. 구체적 수준은 미확인.,작업치료학과,408,컴퓨팅 사고력과 문제해결력,44,Problem Solving,SKILL_NAME_OR_ALIAS_IN_TITLE
+APPROVE,데이터 분석을 직접 다루는 과목명으로 관련성이 명확함. 분석 실무 능력은 별도 검증.,작업치료학과,416,데이터 분석 기초,18,Data Analysis,SKILL_NAME_OR_ALIAS_IN_TITLE
+APPROVE,데이터 분석을 직접 다루는 과목명으로 관련성이 명확함. 분석 실무 능력은 별도 검증.,작업치료학과,409,데이터 분석 입문,18,Data Analysis,SKILL_NAME_OR_ALIAS_IN_TITLE
+APPROVE,알고리즘을 명시한 교과목으로 이론·구현 주제가 관련됨. 관련성만 인정.,작업치료학과,418,파이썬 기반 자료구조와 알고리즘,38,Algorithm,SKILL_NAME_OR_ALIAS_IN_TITLE
+APPROVE,자료구조를 명시한 교과목으로 자료구조 기초 역량과 직접 관련됨. RELATED만 승인.,작업치료학과,418,파이썬 기반 자료구조와 알고리즘,39,Data Structure,SKILL_NAME_OR_ALIAS_IN_TITLE
+APPROVE,Java 언어를 명시한 교과목으로 언어 관련성이 명확함. 숙련도는 별도로 판단.,작업치료학과,415,JAVA 프로그래밍,2,Java,SKILL_NAME_OR_ALIAS_IN_TITLE
+APPROVE,원본 과목명의 깨진 문자(柴)는 후속 정정 필요. 문제해결 표현 자체는 분명함.,작업치료학과,403,SGD柴지역사회문제해결Ⅰ,44,Problem Solving,SKILL_NAME_OR_ALIAS_IN_TITLE
+APPROVE,원본 과목명의 깨진 문자(柴)는 후속 정정 필요. 문제해결 표현 자체는 분명함.,작업치료학과,405,SGD柴지역사회문제해결Ⅱ,44,Problem Solving,SKILL_NAME_OR_ALIAS_IN_TITLE
+APPROVE,알고리즘을 명시한 교과목으로 이론·구현 주제가 관련됨. 관련성만 인정.,의료신소재학과,1542,알고리즘,38,Algorithm,SKILL_NAME_OR_ALIAS_IN_TITLE
+APPROVE,자료구조를 명시한 교과목으로 자료구조 기초 역량과 직접 관련됨. RELATED만 승인.,의료신소재학과,1539,자료구조,39,Data Structure,SKILL_NAME_OR_ALIAS_IN_TITLE
+APPROVE,제제학·제제공학은 의약품 제형 원리와 직접 관련됨. 실제 제형 설계 수행 능력은 확인되지 않아 RELATED만 승인.,의료신소재학과,1571,제제공학,199,의약품 제형 설계,2026_CURRICULUM_TOPIC
+APPROVE,데이터베이스 또는 DB 프로그래밍 교과목으로 DB 지식과 직접 관련됨. RELATED만 승인.,의료신소재학과,1533,데이터베이스,14,Database,SKILL_NAME_OR_ALIAS_IN_TITLE
+APPROVE,소프트웨어공학 교과목과 해당 역량이 직접 연결됨. RELATED만 승인.,의료신소재학과,1541,소프트웨어공학,40,Software Engineering,SKILL_NAME_OR_ALIAS_IN_TITLE
+APPROVE,컴퓨터네트워크 과목과 네트워크 지식이 명확히 관련됨. RELATED만 승인.,의료신소재학과,1543,컴퓨터네트워크,43,Computer Network,SKILL_NAME_OR_ALIAS_IN_TITLE
+APPROVE,생체신호계측공학 과목과 계측 역량의 주제가 직접 일치함. RELATED만 승인.,의료신소재학과,1521,생체신호계측공학,146,생체신호 계측,SKILL_NAME_OR_ALIAS_IN_TITLE
+APPROVE,클라우드컴퓨팅 과목과 클라우드 기초 지식이 직접 관련됨. 인프라 구축 숙련도로 판단하지 않음.,의료신소재학과,1432,클라우드컴퓨팅이해,36,Cloud,SKILL_NAME_OR_ALIAS_IN_TITLE
+HOLD,일반 영상처리/의료영상처리만으로 Computer Vision의 객체 인식·영상 이해까지 포함한다고 단정할 수 없음. 강의계획서 확인.,의료신소재학과,1524,의료영상학및영상처리,29,Computer Vision,SKILL_NAME_OR_ALIAS_IN_TITLE
+APPROVE,문제해결을 명시한 과목으로 문제 해결 역량과 직접 관련됨. 구체적 수준은 미확인.,의료신소재학과,1440,창의융합적사고를 통한 사회문제해결,44,Problem Solving,SKILL_NAME_OR_ALIAS_IN_TITLE
+APPROVE,문제해결을 명시한 과목으로 문제 해결 역량과 직접 관련됨. 구체적 수준은 미확인.,의료신소재학과,1417,컴퓨팅 사고력과 문제해결력,44,Problem Solving,SKILL_NAME_OR_ALIAS_IN_TITLE
+APPROVE,데이터 분석을 직접 다루는 과목명으로 관련성이 명확함. 분석 실무 능력은 별도 검증.,의료신소재학과,1425,데이터 분석 기초,18,Data Analysis,SKILL_NAME_OR_ALIAS_IN_TITLE
+APPROVE,데이터 분석을 직접 다루는 과목명으로 관련성이 명확함. 분석 실무 능력은 별도 검증.,의료신소재학과,1418,데이터 분석 입문,18,Data Analysis,SKILL_NAME_OR_ALIAS_IN_TITLE
+APPROVE,알고리즘을 명시한 교과목으로 이론·구현 주제가 관련됨. 관련성만 인정.,의료신소재학과,1427,파이썬 기반 자료구조와 알고리즘,38,Algorithm,SKILL_NAME_OR_ALIAS_IN_TITLE
+APPROVE,자료구조를 명시한 교과목으로 자료구조 기초 역량과 직접 관련됨. RELATED만 승인.,의료신소재학과,1427,파이썬 기반 자료구조와 알고리즘,39,Data Structure,SKILL_NAME_OR_ALIAS_IN_TITLE
+APPROVE,제제학은 제형의 이론과 관련됨. 설계 수행능력이 확인된 것은 아니므로 RELATED로만 연결.,의료신소재학과,1559,제제학Ⅰ,199,의약품 제형 설계,2026_CURRICULUM_TOPIC
+APPROVE,제제학은 제형의 이론과 관련됨. 설계 수행능력이 확인된 것은 아니므로 RELATED로만 연결.,의료신소재학과,1560,제제학Ⅱ,199,의약품 제형 설계,2026_CURRICULUM_TOPIC
+APPROVE,Java 언어를 명시한 교과목으로 언어 관련성이 명확함. 숙련도는 별도로 판단.,의료신소재학과,1535,JAVA,2,Java,SKILL_NAME_OR_ALIAS_IN_TITLE
+APPROVE,Java 언어를 명시한 교과목으로 언어 관련성이 명확함. 숙련도는 별도로 판단.,의료신소재학과,1424,JAVA 프로그래밍,2,Java,SKILL_NAME_OR_ALIAS_IN_TITLE
+APPROVE,원본 과목명의 깨진 문자(柴)는 후속 정정 필요. 문제해결 표현 자체는 분명함.,의료신소재학과,1438,SGD柴지역사회문제해결Ⅰ,44,Problem Solving,SKILL_NAME_OR_ALIAS_IN_TITLE
+APPROVE,원본 과목명의 깨진 문자(柴)는 후속 정정 필요. 문제해결 표현 자체는 분명함.,의료신소재학과,1441,SGD柴지역사회문제해결Ⅱ,44,Problem Solving,SKILL_NAME_OR_ALIAS_IN_TITLE
+APPROVE,제제학·제제공학은 의약품 제형 원리와 직접 관련됨. 실제 제형 설계 수행 능력은 확인되지 않아 RELATED만 승인.,제약생명공학과,1656,제제공학,199,의약품 제형 설계,2026_CURRICULUM_TOPIC
+APPROVE,클라우드컴퓨팅 과목과 클라우드 기초 지식이 직접 관련됨. 인프라 구축 숙련도로 판단하지 않음.,제약생명공학과,1600,클라우드컴퓨팅이해,36,Cloud,SKILL_NAME_OR_ALIAS_IN_TITLE
+APPROVE,문제해결을 명시한 과목으로 문제 해결 역량과 직접 관련됨. 구체적 수준은 미확인.,제약생명공학과,1585,컴퓨팅 사고력과 문제해결력,44,Problem Solving,SKILL_NAME_OR_ALIAS_IN_TITLE
+APPROVE,데이터 분석을 직접 다루는 과목명으로 관련성이 명확함. 분석 실무 능력은 별도 검증.,제약생명공학과,1593,데이터 분석 기초,18,Data Analysis,SKILL_NAME_OR_ALIAS_IN_TITLE
+APPROVE,데이터 분석을 직접 다루는 과목명으로 관련성이 명확함. 분석 실무 능력은 별도 검증.,제약생명공학과,1586,데이터 분석 입문,18,Data Analysis,SKILL_NAME_OR_ALIAS_IN_TITLE
+APPROVE,알고리즘을 명시한 교과목으로 이론·구현 주제가 관련됨. 관련성만 인정.,제약생명공학과,1595,파이썬 기반 자료구조와 알고리즘,38,Algorithm,SKILL_NAME_OR_ALIAS_IN_TITLE
+APPROVE,자료구조를 명시한 교과목으로 자료구조 기초 역량과 직접 관련됨. RELATED만 승인.,제약생명공학과,1595,파이썬 기반 자료구조와 알고리즘,39,Data Structure,SKILL_NAME_OR_ALIAS_IN_TITLE
+APPROVE,제제학은 제형의 이론과 관련됨. 설계 수행능력이 확인된 것은 아니므로 RELATED로만 연결.,제약생명공학과,1627,제제학Ⅰ,199,의약품 제형 설계,2026_CURRICULUM_TOPIC
+APPROVE,제제학은 제형의 이론과 관련됨. 설계 수행능력이 확인된 것은 아니므로 RELATED로만 연결.,제약생명공학과,1634,제제학Ⅱ,199,의약품 제형 설계,2026_CURRICULUM_TOPIC
+APPROVE,Java 언어를 명시한 교과목으로 언어 관련성이 명확함. 숙련도는 별도로 판단.,제약생명공학과,1592,JAVA 프로그래밍,2,Java,SKILL_NAME_OR_ALIAS_IN_TITLE
+APPROVE,원본 과목명의 깨진 문자(柴)는 후속 정정 필요. 문제해결 표현 자체는 분명함.,제약생명공학과,1580,SGD柴지역사회문제해결Ⅰ,44,Problem Solving,SKILL_NAME_OR_ALIAS_IN_TITLE
+APPROVE,원본 과목명의 깨진 문자(柴)는 후속 정정 필요. 문제해결 표현 자체는 분명함.,제약생명공학과,1582,SGD柴지역사회문제해결Ⅱ,44,Problem Solving,SKILL_NAME_OR_ALIAS_IN_TITLE
+APPROVE,클라우드컴퓨팅 과목과 클라우드 기초 지식이 직접 관련됨. 인프라 구축 숙련도로 판단하지 않음.,의료공간디자인학과,1318,클라우드컴퓨팅이해,36,Cloud,SKILL_NAME_OR_ALIAS_IN_TITLE
+APPROVE,문제해결을 명시한 과목으로 문제 해결 역량과 직접 관련됨. 구체적 수준은 미확인.,의료공간디자인학과,1326,창의융합적사고를 통한 사회문제해결,44,Problem Solving,SKILL_NAME_OR_ALIAS_IN_TITLE
+APPROVE,문제해결을 명시한 과목으로 문제 해결 역량과 직접 관련됨. 구체적 수준은 미확인.,의료공간디자인학과,1303,컴퓨팅 사고력과 문제해결력,44,Problem Solving,SKILL_NAME_OR_ALIAS_IN_TITLE
+APPROVE,데이터 분석을 직접 다루는 과목명으로 관련성이 명확함. 분석 실무 능력은 별도 검증.,의료공간디자인학과,1311,데이터 분석 기초,18,Data Analysis,SKILL_NAME_OR_ALIAS_IN_TITLE
+APPROVE,데이터 분석을 직접 다루는 과목명으로 관련성이 명확함. 분석 실무 능력은 별도 검증.,의료공간디자인학과,1304,데이터 분석 입문,18,Data Analysis,SKILL_NAME_OR_ALIAS_IN_TITLE
+APPROVE,알고리즘을 명시한 교과목으로 이론·구현 주제가 관련됨. 관련성만 인정.,의료공간디자인학과,1313,파이썬 기반 자료구조와 알고리즘,38,Algorithm,SKILL_NAME_OR_ALIAS_IN_TITLE
+APPROVE,자료구조를 명시한 교과목으로 자료구조 기초 역량과 직접 관련됨. RELATED만 승인.,의료공간디자인학과,1313,파이썬 기반 자료구조와 알고리즘,39,Data Structure,SKILL_NAME_OR_ALIAS_IN_TITLE
+APPROVE,Java 언어를 명시한 교과목으로 언어 관련성이 명확함. 숙련도는 별도로 판단.,의료공간디자인학과,1310,JAVA 프로그래밍,2,Java,SKILL_NAME_OR_ALIAS_IN_TITLE
+APPROVE,원본 과목명의 깨진 문자(柴)는 후속 정정 필요. 문제해결 표현 자체는 분명함.,의료공간디자인학과,1324,SGD柴지역사회문제해결Ⅰ,44,Problem Solving,SKILL_NAME_OR_ALIAS_IN_TITLE
+APPROVE,원본 과목명의 깨진 문자(柴)는 후속 정정 필요. 문제해결 표현 자체는 분명함.,의료공간디자인학과,1327,SGD柴지역사회문제해결Ⅱ,44,Problem Solving,SKILL_NAME_OR_ALIAS_IN_TITLE
+APPROVE,알고리즘을 명시한 교과목으로 이론·구현 주제가 관련됨. 관련성만 인정.,의료IT공학과,1280,알고리즘,38,Algorithm,SKILL_NAME_OR_ALIAS_IN_TITLE
+APPROVE,자료구조를 명시한 교과목으로 자료구조 기초 역량과 직접 관련됨. RELATED만 승인.,의료IT공학과,1276,자료구조,39,Data Structure,SKILL_NAME_OR_ALIAS_IN_TITLE
+APPROVE,데이터베이스 또는 DB 프로그래밍 교과목으로 DB 지식과 직접 관련됨. RELATED만 승인.,의료IT공학과,1268,데이터베이스,14,Database,SKILL_NAME_OR_ALIAS_IN_TITLE
+APPROVE,소프트웨어공학 교과목과 해당 역량이 직접 연결됨. RELATED만 승인.,의료IT공학과,1279,소프트웨어공학,40,Software Engineering,SKILL_NAME_OR_ALIAS_IN_TITLE
+APPROVE,컴퓨터네트워크 과목과 네트워크 지식이 명확히 관련됨. RELATED만 승인.,의료IT공학과,1281,컴퓨터네트워크,43,Computer Network,SKILL_NAME_OR_ALIAS_IN_TITLE
+APPROVE,클라우드컴퓨팅 과목과 클라우드 기초 지식이 직접 관련됨. 인프라 구축 숙련도로 판단하지 않음.,의료IT공학과,1225,클라우드컴퓨팅이해,36,Cloud,SKILL_NAME_OR_ALIAS_IN_TITLE
+APPROVE,문제해결을 명시한 과목으로 문제 해결 역량과 직접 관련됨. 구체적 수준은 미확인.,의료IT공학과,1230,창의융합적사고를통한사회문제해결,44,Problem Solving,SKILL_NAME_OR_ALIAS_IN_TITLE
+APPROVE,문제해결을 명시한 과목으로 문제 해결 역량과 직접 관련됨. 구체적 수준은 미확인.,의료IT공학과,1204,컴퓨팅 사고력과 문제해결력,44,Problem Solving,SKILL_NAME_OR_ALIAS_IN_TITLE
+APPROVE,데이터 분석을 직접 다루는 과목명으로 관련성이 명확함. 분석 실무 능력은 별도 검증.,의료IT공학과,1212,데이터 분석 기초,18,Data Analysis,SKILL_NAME_OR_ALIAS_IN_TITLE
+APPROVE,데이터 분석을 직접 다루는 과목명으로 관련성이 명확함. 분석 실무 능력은 별도 검증.,의료IT공학과,1205,데이터 분석 입문,18,Data Analysis,SKILL_NAME_OR_ALIAS_IN_TITLE
+APPROVE,알고리즘을 명시한 교과목으로 이론·구현 주제가 관련됨. 관련성만 인정.,의료IT공학과,1214,파이썬 기반 자료구조와 알고리즘,38,Algorithm,SKILL_NAME_OR_ALIAS_IN_TITLE
+APPROVE,자료구조를 명시한 교과목으로 자료구조 기초 역량과 직접 관련됨. RELATED만 승인.,의료IT공학과,1214,파이썬 기반 자료구조와 알고리즘,39,Data Structure,SKILL_NAME_OR_ALIAS_IN_TITLE
+APPROVE,Java 언어를 명시한 교과목으로 언어 관련성이 명확함. 숙련도는 별도로 판단.,의료IT공학과,1271,JAVA,2,Java,SKILL_NAME_OR_ALIAS_IN_TITLE
+APPROVE,Java 언어를 명시한 교과목으로 언어 관련성이 명확함. 숙련도는 별도로 판단.,의료IT공학과,1211,JAVA 프로그래밍,2,Java,SKILL_NAME_OR_ALIAS_IN_TITLE
+APPROVE,원본 과목명의 깨진 문자(柴)는 후속 정정 필요. 문제해결 표현 자체는 분명함.,의료IT공학과,1218,SGD柴지역사회문제해결Ⅰ,44,Problem Solving,SKILL_NAME_OR_ALIAS_IN_TITLE
+APPROVE,원본 과목명의 깨진 문자(柴)는 후속 정정 필요. 문제해결 표현 자체는 분명함.,의료IT공학과,1221,SGD柴지역사회문제해결Ⅱ,44,Problem Solving,SKILL_NAME_OR_ALIAS_IN_TITLE

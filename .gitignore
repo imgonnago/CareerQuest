@@ -29,3 +29,24 @@ venv/
 chroma/
 data/raw/
 .DS_Store
+
+
+# --------------------------------------------------
+# CareerQuest generated analysis reports
+# --------------------------------------------------
+
+/data/reports/*
+
+# Retain reviewed inputs used for reproducible skill setup
+!/data/reports/skill_mapping/
+!/data/reports/skill_readiness/
+
+# Ignore generated outputs inside those directories
+/data/reports/skill_mapping/*
+/data/reports/skill_readiness/*
+
+# Reviewed and approved inputs
+!/data/reports/skill_mapping/course_skill_candidates_2026_reviewed.csv
+!/data/reports/skill_mapping/course_skill_missed_existing_review.csv
+!/data/reports/skill_mapping/careerquest_new_skill_proposals_2026.csv
+!/data/reports/skill_readiness/06_skill_candidate_evidence.csv

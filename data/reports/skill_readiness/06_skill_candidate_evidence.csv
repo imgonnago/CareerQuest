@@ -1,0 +1,14 @@
+﻿category,candidate_skill,exact_name_in_skill_or_alias,unmapped_courses,parsed_jobs,sample_course,sample_course_resource_ids,sample_job_resource_ids,review_status
+제약바이오,의약품 제형 설계,False,6,0,제제공학 / 제제학Ⅰ / 제제학Ⅱ / 제제공학,1656 / 1627 / 1634 / 1571,,REVIEW_DUPLICATE_AND_SCOPE
+간호,정신건강 간호,False,4,1,정신간호학실습Ⅰ / 정신간호학Ⅰ / 정신간호학실습Ⅱ / 정신간호학Ⅱ,388 / 375 / 395 / 384,7395,REVIEW_DUPLICATE_AND_SCOPE
+간호,모성 간호,False,4,0,여성건강간호학실습Ⅰ / 여성건강간호학Ⅰ / 여성건강간호학실습Ⅱ / 여성건강간호학Ⅱ,382 / 372 / 386 / 378,,REVIEW_DUPLICATE_AND_SCOPE
+간호,아동 간호,False,4,0,아동간호학실습Ⅰ / 아동간호학Ⅰ / 아동간호학실습Ⅱ / 아동간호학Ⅱ,374 / 364 / 381 / 371,,REVIEW_DUPLICATE_AND_SCOPE
+간호,지역사회 건강관리,False,3,0,지역사회간호학실습 / 지역사회간호학Ⅰ / 지역사회간호학Ⅱ,396 / 376 / 383,,REVIEW_DUPLICATE_AND_SCOPE
+방사선,핵의학 영상검사,False,3,0,방사선종양학과/핵의학실습 / 핵의학검사기술학 / 핵의학기술학,310 / 663 / 746,,REVIEW_DUPLICATE_AND_SCOPE
+재활,노인 재활,False,2,0,노인작업치료학 / 노인물리치료학 및 실습(종합설계),467 / 940,,REVIEW_DUPLICATE_AND_SCOPE
+간호,노인 간호,False,1,0,노인간호학,368,,REVIEW_DUPLICATE_AND_SCOPE
+방사선,방사선치료 계획,False,1,0,방사선치료학,748,,REVIEW_DUPLICATE_AND_SCOPE
+재활,보행 보조기 처방 지원,False,1,0,보조공학,454,,REVIEW_DUPLICATE_AND_SCOPE
+임상검사,심전도 및 생리기능검사,False,1,0,심전도 개론 및 실습,1000,,REVIEW_DUPLICATE_AND_SCOPE
+제약바이오,임상시험 운영관리,False,0,1,,,6946,REVIEW_DUPLICATE_AND_SCOPE
+임상검사,조직병리검사,False,0,1,,,7582,REVIEW_DUPLICATE_AND_SCOPE
