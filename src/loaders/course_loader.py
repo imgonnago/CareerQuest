@@ -563,6 +563,19 @@ def upsert_course_record(
                 course_name,
             )
 
+    # PDF_COURSE_TITLE_FIX_2026
+    # 원본 PDF에 없는 제목 앞 글리프 제거
+    if course_name.startswith("】"):
+        course_name = course_name.lstrip("】").strip()
+
+    if (
+        curriculum_year == 2026
+        and department_name == "의료신소재학과"
+        and course_code == "61822B"
+        and course_name in ("DYC 자연과물질_", "DYC 자연과물질 _")
+    ):
+        course_name = "DYC_자연과물질"
+
     year_level = (
         parse_int(
             record.get(

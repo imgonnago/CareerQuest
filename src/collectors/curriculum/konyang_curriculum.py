@@ -326,6 +326,15 @@ def normalize_name(
         clean_text(value),
     )
 
+    # PDF_COURSE_TITLE_FIX_2026
+    # 원본 PDF에 없는 닫는 괄호 글리프 제거
+    if value.startswith("】"):
+        value = value.lstrip("】").strip()
+
+    # 공식 교육과정에 명시된 DYC 과목명
+    if value == "DYC 자연과물질_":
+        value = "DYC_자연과물질"
+
     if not value:
         return None
 
