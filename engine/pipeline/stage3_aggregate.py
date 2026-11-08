@@ -43,6 +43,7 @@ ROLE_CLASSIFIER = LLMConfig(temperature=0)
 SKILL_NAMER = LLMConfig(temperature=0)
 
 SIM_THRESHOLD = 0.80        # 후보 묶음 기준 코사인 유사도 (bge-m3, 실험값)
+ACTIVITY_CATEGORIES = ("교내프로그램", "대외활동")
 MAX_NAMES_PER_ITEM = 5      # [21] 카드 하나에 붙이는 Skill 상한 (긴 도구 나열이 표를 덮지 않게)
 MATCH_TOP_K = 5             # [41] 사전 매칭 LLM에 보여 줄 Skill당 사전 후보 수
 MATCH_MIN_SIM = 0.65        # [41] 이보다 덜 비슷한 사전 항목은 후보로 안 보여 줌 (bge-m3, 실험값)
@@ -149,7 +150,8 @@ def name_items(target: str, cards: list[NumberedCard]) -> list[list[str]]:
         i = int(d.item[1:]) - 1
         if 0 <= i < len(cards) and i not in names and (ns := _split_names(d.names)):
             names[i] = ns
-    return [names.get(i, [c.item]) for i, c in enumerate(cards)]
+    # [82] 활동은 활동 이름 하나로 센다. 인용 기준으로 나누면 활동에서 배운 기술(Spring Boot·CI/CD)이 활동 추천 줄이 된다
+    return [[c.item] if c.category in ACTIVITY_CATEGORIES else names.get(i, [c.item]) for i, c in enumerate(cards)]
 
 
 def candidate_groups(names: list[str]) -> list[list[int]]:
@@ -418,5 +420,5 @@ def aggregate_evidence(ext: ExtractionResult, skill_dict: list[SkillEntry] | Non
     skills = build_table(cards, roles)
     return AggregationResult(
         job=ext.job, docs=ext.docs, cards=cards, doc_roles=roles, skills=skills, skill_dict_loaded=bool(skill_dict),
-        duplicates=duplicates, timings={k: round(v, 1) for k, v in timings.items()},
+        duplicates=duplicates, timings={k: round(v, 1) for k, v in timings.items()}, texts=ext.texts,
     )

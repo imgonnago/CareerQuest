@@ -106,13 +106,13 @@ def search_requirements(
 
 
 # LLM 도구 호출용 정의 (Ollama · OpenAI 공통 function 형식).
-# 본문을 읽을 문서는 LLM이 목록을 보고 따로 고르므로(2단계 계획 LLM) 인자는 검색어만 받는다
+# 본문을 읽을 문서는 LLM이 목록을 보고 read_documents로 따로 고르므로 인자는 검색어만 받는다 ([74])
 TOOL_SPEC = {
     "type": "function",
     "function": {
         "name": "search_requirements",
-        "description": "네이버·카카오 검색으로 기업 및 직무 요구사항, 우대사항, 합격 후기, 자격증 정보를 찾는다. "
-                       "건양대 자료(RAG)에 근거가 없거나 부족할 때 사용한다.",
+        "description": "네이버·카카오 웹 검색으로 기업 및 직무 요구사항, 우대사항, 자격증, 공모전 정보를 찾는다. "
+                       "결과는 문서 번호와 제목 목록이다.",
         "parameters": {
             "type": "object",
             "properties": {

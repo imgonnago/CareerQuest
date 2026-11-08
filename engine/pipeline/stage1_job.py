@@ -3,7 +3,8 @@
 검증
 - interests.original이 학생 입력에 실제로 있는지 대조 (없으면 뺌 — LLM이 관심 분야를 지어내는 것 방지)
   희망 직무와 같거나 기업명이 든 관심 분야도 뺌 (LLM이 자주 섞음)
-- companies.original이 학생 입력에 실제로 있는지 대조 (없으면 뺌 — 학생이 말하지 않은 기업 추천 방지)
+- companies.original이 학생 입력에 실제로 있는지 대조 (없으면 뺌 — 학생이 말하지 않은 기업 추천 방지).
+  [48] 업로드 문서는 빼고 폼·질문에서만 대조 (이력서의 전 직장이 목표 기업이 되지 않게)
   공식명(name)은 대조하지 않는다 — 학생 표기와 달라도 되는 칸 ([25])
 - skills·certificates·projects(보유 항목)의 original도 학생 입력과 대조하고, 폼 칸(StudentInput) 항목을 합친다 ([24])
   이미 한 것(보유 항목)과 겹치는 관심 분야는 뺌
@@ -37,7 +38,12 @@ def render_student(student: StudentInput) -> str:
         ("비교과 활동", " / ".join(student.activities)),
         ("학생 질문", student.question),
     ]
-    return "학생 입력\n" + "\n".join(f"- {k}: {v}" for k, v in rows if v)
+    text = "학생 입력\n" + "\n".join(f"- {k}: {v}" for k, v in rows if v)
+    # [48] 업로드 문서는 본문 전체를 그대로 붙인다 (LLM은 본문 전체를 읽는다 — 자르지 않음)
+    for i, d in enumerate(student.documents, 1):
+        if d.text.strip():
+            text += f"\n\n[업로드 문서 {i}: {d.filename}]\n{d.text.strip()}"
+    return text
 
 
 def _norm(s: str) -> str:
@@ -95,11 +101,13 @@ def set_target_job(student: StudentInput, catalog: list[str] | None = None) -> T
     draft = TargetJobDraft.model_validate(json.loads(msg["content"]))
 
     source = _norm(render_student(student))
+    # [48] 기업은 폼·질문에서만 대조한다 (업로드 이력서의 전 직장·인턴 기업이 목표 기업으로 들어가지 않게)
+    form_source = _norm(render_student(student.model_copy(update={"documents": []})))
     dropped = []
     # [25] 기업은 학생 표기(original)로 대조하고, 검색에는 LLM이 고친 공식명(name)·키워드를 쓴다
     companies = []
     for c in draft.companies:
-        if _norm(c.original) in source:
+        if _norm(c.original) in form_source:
             c.keywords = _keywords(c.keywords) or [c.name]
             companies.append(c)
         else:

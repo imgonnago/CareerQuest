@@ -23,6 +23,24 @@ MIN_SCORE = 0.55
 SNIPPET_CHARS = 300  # 선택 LLM·근거 풀 표시용 발췌 길이 (본문은 texts에 전체)
 
 
+# [74] LLM 도구 호출용 정의 (Ollama 형식). 문서 종류·건수는 슬롯에 맞게 코드가 정하므로 인자는 검색어만 받는다
+TOOL_SPEC = {
+    "type": "function",
+    "function": {
+        "name": "search_rag",
+        "description": "건양대 교육과정·비교과·수업계획서와 수집해 둔 채용 공고·자격증·공모전 자료(DB)를 찾는다. "
+                       "결과는 문서 번호와 제목 목록이다.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "query": {"type": "string", "description": "검색어. 예: '건양대 인공지능 교육과정'"},
+            },
+            "required": ["query"],
+        },
+    },
+}
+
+
 class RagSearchError(RuntimeError):
     """RAG DB에 접속·조회하지 못함."""
 

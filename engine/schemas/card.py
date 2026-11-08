@@ -40,14 +40,3 @@ class EvidenceCard(BaseModel):
     evidence_level: Literal["snippet", "fulltext"] = Field(description="인용이 본문에서 왔는지 요약에서 왔는지")
     grade: int | None = Field(default=None, description="[54] 교과목: 개설 학년 (코드가 원문 표 머리글·\"N학년\"에서 읽음, 못 읽으면 null)")
     course_type: CourseType | None = Field(default=None, description="[54] 교과목: 교양/전공 (코드가 원문 표 제목에서 읽음, 못 읽으면 null)")
-
-
-class DocSelection(BaseModel):
-    """2단계 계획 LLM 출력: 검색 목록에서 본문까지 읽을 문서를 고른다."""
-    selected: list[Annotated[str, StringConstraints(pattern=r"^D[0-9]+$")]] = Field(
-        description="읽을 문서 번호만. 관련 높은 순. 예: [\"D3\", \"D7\"]")
-
-
-class SearchPlan(BaseModel):
-    """[37] 2단계 계획 LLM 출력: 가이드 슬롯 하나의 검색어. 검색은 코드가 실행한다."""
-    queries: list[str] = Field(description="검색어. \"대상 + 찾는 영역\" 2~5단어. 예: [\"삼성전자 채용 공고\", \"AI 자격증\"]")

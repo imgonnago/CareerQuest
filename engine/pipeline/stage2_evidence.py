@@ -1,16 +1,20 @@
-"""2단계 근거 추출: 계획 LLM(검색어) → 선택 LLM(읽을 문서) → 코드(본문 수집) → 읽기 LLM(근거 카드) → 코드(대조 검증).
+"""2단계 근거 추출: 도구 호출 에이전트(LLM ↔ 도구 루프) → 코드(대조 검증).
 
-[37] 계획·선택은 아직 덜 채운 가이드 슬롯마다 따로 부른다 (한 번에 시키면 일부 슬롯만 하거나 이전 계획을 되풀이 — [30]·[34])
-1. 계획 LLM이 슬롯마다 검색어를 JSON으로 낸다(SearchPlan). 코드가 검색어마다 RAG(벡터 DB) → 검색 API 순으로 검색하고
-   결과를 근거 풀(EvidencePool)에 쌓으며 문서마다 어느 슬롯 검색어로 나왔는지 기록한다
-   (검색 API 문서의 본문은 이 단계에서 수집하지 않음. RAG 문서는 DB에 본문 전체가 있어 바로 넣음)
-2. 선택 LLM이 슬롯마다 새 대화에서 그 슬롯 검색어로 나온 문서의 제목 목록을 보고 읽을 문서를 고른다 (DocSelection)
-3. 코드가 고른 문서 중 본문 수집 가능한(pending) 문서만 본문을 수집한다
-4. 읽기 LLM이 고른 문서의 본문 전체를 읽고 근거 카드를 JSON으로 낸다 (CardDraftList)
+[74] LLM이 도구를 직접 호출한다 (README "LLM이 도구를 직접 골라 근거를 보충"). 가이드 슬롯마다 새 대화에서:
+1. 에이전트 LLM이 도구를 고른다 (Ollama tool calling, 어떤 도구를 몇 번 부를지·언제 끝낼지 LLM이 판단)
+   - search_rag: 건양대·기관 자료 DB (그 슬롯의 문서 종류만, 코드가 건다)
+   - search_requirements: 네이버·카카오 검색 API
+   - read_documents: 목록에서 고른 문서를 읽는다
+2. 코드가 도구를 실행하고 결과를 대화에 돌려준다. 검색 결과는 [D번호]·제목 목록, 읽기 결과는 카드 요약과 슬롯 현황뿐이다
+   ([9] 본문을 대화에 쌓으면 컨텍스트가 넘친다)
+3. read_documents 안에서 읽기 LLM(새 대화)이 본문 전체를 읽어 근거 카드를 내고(CardDraftList), 코드가 quote를 원문과 대조한다
    문서는 자르지 않고, 한 번에 넣을 분량(READ_BUDGET_CHARS)을 넘으면 문서 단위로 나눠 여러 번 부른다
-5. 코드가 quote를 원문(본문 또는 제목+요약)과 대조해 통과한 카드만 남긴다
+4. 슬롯이 차면 코드가 대화를 끝낸다. LLM이 부족한 채 끝내려 하면 현황을 알려 주고 한 번 더 묻는다
 
-추출 루프 (README "체크리스트 충족까지")
+코드가 지키는 것 (도구 실행·저장·세기·검증): 슬롯 순서, 같은 검색어 차단([34]), 한 번에 읽는 문서 수, 턴·시간 상한,
+필수 슬롯이 비었을 때의 추가 대화([55]), 인용 대조와 카드 걸러내기.
+
+슬롯 채우기 (README "체크리스트 충족까지")
 - [33][58] 가이드 슬롯(SLOTS: 채용 요건 4·자격증 4·활동·공모전·교과목 8·추천 포트폴리오 3)마다 몇 건 채웠는지 센다.
   채용 요건·포트폴리오는 고유 문서(doc_id) 기준 — 한 문서에서 카드가 쏟아져도 슬롯마다 1건 ([31]).
   [57] 항목 슬롯(ITEM_SLOTS: 활동·공모전·교과목, 자격증)은 서로 다른 활동·과목·자격증 수로 센다 — 교육과정 PDF 1건(과목 39개)도,
@@ -19,7 +23,6 @@
   교과목은 학생이 보고 고르는 것이고 해마다 바뀌어 따로 채우지 않는다(채우느라 바퀴를 쓰지 않음). 교과목 카드 규칙은 그대로:
   [54] 학생 학년보다 낮은 학년 과목은 뺀다(학년 모르면 남김), 직무 관련 과목만, 관련 과목 중 교양 먼저
 - [58] 자격증 4개는 채용 공고(채용 요건 카드가 나온 문서)에서 많이 나온 것 → 전체 문서에서 많이 나온 것 → 찾은 순
-- 1~5를 한 바퀴로 보고, 채우지 못한 슬롯이 남아 있으면 다음 바퀴를 돈다
 - [56] 슬롯 순서(SLOT_PRIORITY): 채용 요건·자격증(필수) → 활동·공모전·교과목 → 포트폴리오
 - [57] 건양대 데이터(RAG) → 검색 API 순으로 찾고, 선택 목록·추천에서 건양대 것을 먼저 둔다.
   건양대 문서가 아닌데 교내프로그램으로 분류된 카드는 대외활동으로 고친다. 교과목은 건양대 문서의 카드만 남긴다.
@@ -27,9 +30,8 @@
   1순위 — 슬롯마다 맞는 문서 종류(SLOT_DOC_KINDS, 조각 metadata doc_kind)만 RAG를 먼저 찾는다.
   선택 목록에서 RAG 문서("DB 자료")를 맨 앞에 두고 같은 조건이면 먼저 고르게 한다.
   검색 API는 RAG에 없거나 부족한(오래된) 정보를 보충하는 경로. DB가 꺼져 있으면 경고만 남기고 검색 API로만 진행
-- 다음 바퀴는 부족한 슬롯만 계획·선택한다. 계획 LLM에는 그 슬롯에서 이미 쓴 검색어를 주고, 같은 검색어는 코드가 버린다
-- 이미 읽은 문서는 다음 바퀴 선택 목록에서 뺀다
-- MAX_ROUNDS 바퀴 또는 MAX_SECONDS가 지나면 그때까지 모은 카드로 끝낸다 (바퀴 시작 전에 확인)
+- 이미 찬 슬롯은 대화를 열지 않는다 (앞 슬롯을 위해 읽은 문서의 카드가 뒤 슬롯을 채우기도 함). 이미 읽은 문서는 목록에서 뺀다
+- AGENT_MAX_TURNS 턴 또는 슬롯 몫의 시간이 지나면 그 슬롯을 끝낸다 (LLM 호출 전에 확인). 남은 시간은 뒤 슬롯 몫으로 넘어간다
 """
 import json
 import re
@@ -39,17 +41,20 @@ from collections import Counter
 from pydantic import BaseModel, Field
 
 from engine.llm import LLMConfig, chat
+from engine.pipeline.agent_loop import SearchGuard, run_tool_loop
 from engine.prompts.stage2_evidence import (
-    PLAN_REQUEST, PLAN_SYSTEM, READ_REQUEST, READ_SYSTEM, SELECT_EXTRA, SELECT_REQUEST, SELECT_SYSTEM, SLOT_TASKS,
+    AGENT_NUDGE, AGENT_REQUEST, AGENT_SYSTEM, READ_REQUEST, READ_SYSTEM, SLOT_EXTRA, SLOT_TASKS,
 )
-from engine.schemas import CardDraft, CardDraftList, DocSelection, EvidenceCard, EvidenceDoc, SearchPlan
+from engine.schemas import CardDraft, CardDraftList, EvidenceCard, EvidenceDoc
 from engine.schemas.job import TargetJob
-from engine.tools.rag_search import RagSearchError, search_rag
-from engine.tools.requirements import RequirementSearchResult, fetch_texts, search_requirements
+from engine.tools import jobalio
+from engine.tools.jobalio import TOOL_SPEC as JOB_TOOL_SPEC, search_public_jobs
+from engine.tools.rag_search import TOOL_SPEC as RAG_TOOL_SPEC, RagSearchError, search_rag
+from engine.tools.requirements import TOOL_SPEC as WEB_TOOL_SPEC, RequirementSearchResult, fetch_texts, search_requirements
 
 # 역할별 LLM 설정
-PLANNER = LLMConfig(temperature=0)  # [43] 0.3·0.2는 실행마다 검색어·문서가 바뀌어 편차·시간만 늘고 품질은 그대로 (0.2 3회: 83~175초)
-SELECTOR = LLMConfig(temperature=0)
+# [74] 도구를 고르는 에이전트. [43] 0.3·0.2는 실행마다 검색어·문서가 바뀌어 편차·시간만 늘고 품질은 그대로 (0.2 3회: 83~175초)
+AGENT = LLMConfig(temperature=0, num_predict=1024)
 # [36] 같은 카드를 되풀이하다 컨텍스트 끝(5만 자, 400초)까지 가는 경우가 있어 출력 상한을 둔다.
 # 정상 출력은 카드 25장(인용이 길면 1만 7천 자) 안팎 6천 토큰까지 나옴
 READER = LLMConfig(temperature=0, num_predict=8192)
@@ -97,11 +102,7 @@ ACTIVITY_PER_DOC = 2
 SLOT_PRIORITY = ("채용 요건", "자격증", ACTIVITY, "추천 포트폴리오")
 SCHOOL = "건양대학교"
 SCHOOL_MARKS = ("건양", "konyang")  # 건양대 문서 판정: 제목·요약·도메인·출처·본문에 이 말이 있으면
-# [37] 슬롯별 검색어 수 (1바퀴, 2바퀴부터). [57] 활동·공모전은 건양대 비교과·건양대 대회·외부 공모전 여러 방면으로
-# [58] 활동·공모전·교과목: 1바퀴는 건양대 교내 활동·외부 공모전·대외활동·건양대 교과목 네 방면
-FIRST_QUERIES = {"채용 요건": 2, ACTIVITY: 4}  # 없는 슬롯은 1
-NEXT_QUERIES = {ACTIVITY: 2}                   # 없는 슬롯은 1
-SELECT_PER_SLOT = 2     # 슬롯마다 한 바퀴에 고를 문서 상한 (채울 수가 1 남았으면 1)
+SELECT_PER_SLOT = 2     # read_documents 한 번에 읽을 문서 상한 (채울 수가 1 남았으면 1)
 # [54] 항목이 짧은 RAG 문서(과목·프로그램·대회 하나짜리)가 나오는 슬롯은 RAG 문서를 한 번에 더 고른다
 # (수백 자라 읽기 부담이 작고, 여러 항목을 비교해야 함). 웹 문서는 그대로 SELECT_PER_SLOT까지
 RAG_WIDE_SLOTS = {ACTIVITY}
@@ -125,14 +126,42 @@ SLOT_DOC_KINDS: dict[str, list[str]] = {
 # [58]~[60]은 RAG 먼저·교내 먼저였음 (RAG 6건까지 골라 교육과정 등이 자리를 먼저 차지하고 외부 글은 바퀴당 2건만 읽힘)
 ACTIVITY_KIND_RANK = {"공모전": 0, "대외활동": 0, "지역프로그램": 0, "비교과": 1, "교내프로그램": 1,
                       "교육과정": 2, "수업계획서": 2, "로드맵": 2}
-ACTIVITY_WEB_SELECT = 4  # [61] 활동·공모전·교과목에서 한 바퀴에 고를 웹 문서 상한 (다른 슬롯은 SELECT_PER_SLOT)
-MAX_ROUNDS = 6          # 바퀴 상한. [56] 실험 3회 모두 슬롯을 채우는 데 6바퀴가 필요했음
-# [55] 학생에게 꼭 줄 슬롯. 시간·바퀴 상한에 닿아도 근거가 0건이면 그 슬롯만 REQUIRED_EXTRA_ROUNDS바퀴까지 더 돈다
+ACTIVITY_WEB_SELECT = 4  # [61] 활동·공모전·교과목에서 read_documents 한 번에 읽을 웹 문서 상한 (다른 슬롯은 SELECT_PER_SLOT)
+AGENT_MAX_TURNS = 12    # [74] 슬롯 대화 하나의 LLM 턴 상한
+AGENT_IDLE_TURNS = 2    # [74] 새로 실행된 도구가 없는 턴(같은 검색어 되풀이 등)이 이만큼 이어지면 그 슬롯을 끝낸다 ([34])
+AGENT_NUDGES = 2        # [78] 슬롯이 부족한 채 끝내려 할 때 되묻는 횟수. 두 번째는 첫 되묻기 뒤 카드가 늘었을 때만
+AGENT_QUERY_MAX_WORDS = 6  # [78] 이보다 긴 검색어는 실행하지 않고 줄이게 한다 ([26] 2~5단어, 조금 넘는 것은 봐줌)
+LIST_SNIPPET_CHARS = 80 # [78] 검색 결과 목록에 보여 줄 요약 앞부분
+SEARCH_BEFORE_READ = 3  # [81] 읽지 않고 이어서 실행한 검색이 이만큼이면 안 읽은 문서가 있는 동안 검색 도구를 뺀다 (무엇을 읽을지는 LLM이 고름)
+PROVIDER_RANK = {"rag": 0, "jobalio": 1}  # [84] 활동 외 슬롯 목록 순서. 나머지(웹)는 2
+UNREAD_SHOWN = 10       # [81] 검색이 막히거나 새 문서가 없을 때 다시 보여 줄 안 읽은 문서 수
+AGENT_LIST_MAX = 20     # [74] 검색 결과 한 번에 보여 줄 문서 수. [30] 목록이 길면 앞쪽만 보고 고른다
+# [55] 학생에게 꼭 줄 슬롯. 시간·턴 상한에 닿아도 근거가 0건이면 이 시간만큼 그 슬롯 대화를 한 번 더 연다
 REQUIRED_SLOTS = ("채용 요건", "자격증")
-REQUIRED_EXTRA_ROUNDS = 1
-# 2단계 시간 상한. 넘으면 새 바퀴를 시작하지 않음(바퀴 도중에는 안 끊어 실제로는 한 바퀴만큼 더 걸릴 수 있음).
+REQUIRED_EXTRA_SECONDS = 60
+# 2단계 시간 상한. 슬롯마다 채울 수에 비례해 나눈다. 진행 중인 읽기는 끊지 않아 실제로는 더 걸릴 수 있음.
 # [56] 시간 상한 없이 학생 3명으로 잼: 다 찬 시점 148초·261초(평균 204초), 1명은 6바퀴(158초)에도 교내 활동 1/3 → 평균을 올려 최소값으로
 MAX_SECONDS = 205
+
+
+# [74] 읽기 도구. 검색 도구 정의는 각 도구 모듈(TOOL_SPEC)에 있다
+READ_TOOL_SPEC = {
+    "type": "function",
+    "function": {
+        "name": "read_documents",
+        "description": "검색 결과 목록에서 고른 문서의 본문 전체를 읽어 근거 카드를 만든다. "
+                       "결과로 문서마다 나온 근거 항목과 슬롯 현황을 돌려준다.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "docs": {"type": "array", "items": {"type": "string"},
+                         "description": "읽을 문서 번호. 관련 높은 순. 예: [\"D3\", \"D7\"]"},
+            },
+            "required": ["docs"],
+        },
+    },
+}
+SEARCH_NEXT = "이 슬롯의 근거가 있을 문서를 read_documents로 고르거나, 쓸 만한 문서가 없으면 다른 검색어를 써."
 
 
 class EvidencePool:
@@ -175,8 +204,11 @@ class EvidencePool:
         lines = []
         for num in nums or self.docs:
             doc = self.docs[num]
-            label = "DB 자료" if doc.provider == "rag" else "본문 가능" if self.readable(num) else "요약만"
-            lines.append(f"[{num}] {doc.title} ({label})")
+            label = "DB 자료" if doc.provider == "rag" else "공고 원문" if doc.provider == "jobalio" \
+                else "본문 가능" if self.readable(num) else "요약만"
+            # [78] 제목만으로는 관계없는 문서를 고른다. 고르는 데 쓸 앞부분만 보여 주고, 본문은 read_documents가 전체를 읽는다
+            brief = re.sub(r"\s+", " ", doc.snippet or "").strip()[:LIST_SNIPPET_CHARS]
+            lines.append(f"[{num}] {doc.title} ({label})" + (f" — {brief}" if brief else ""))
         return "\n".join(lines)
 
     def render_slot(self, slot: str, exclude: set[str]) -> tuple[list[str], str]:
@@ -186,15 +218,18 @@ class EvidencePool:
         "(본문 가능) 우선" 규칙만으로는 제목이 좋은 네이버 문서(요약만)를 골라 카드가 0장 나옴.
         [48] RAG 문서(DB 자료)는 그보다도 앞에 둔다 (데이터 우선순위 1순위).
         """
-        nums = [n for n, slots in self.slots_of.items() if slot in slots and n not in exclude]
+        nums = self.order([n for n, slots in self.slots_of.items() if slot in slots and n not in exclude], slot)
+        return nums, self.render_titles(nums) if nums else ""
+
+    def order(self, nums: list[str], slot: str) -> list[str]:
+        """슬롯 목록 순서로 정렬하고, 본문 가능 문서가 충분하면 요약만 있는 문서를 뺀다."""
         # 안정 정렬: [48] RAG 먼저, [57] 그 안에서 건양대 자료 먼저 (RAG 건양대 → RAG 기타 → 웹 건양대 → 웹)
         if slot == ACTIVITY:  # [61] 외부 → 건양대 → 교육과정 (같은 단계 안에서는 웹 먼저)
             nums.sort(key=lambda n: (self._activity_tier(n), self.docs[n].provider == "rag"))
-        else:  # [48] RAG 먼저, [57] 그 안에서 건양대 자료 먼저
-            nums.sort(key=lambda n: (self.docs[n].provider != "rag", not is_school_doc(self.docs[n], None)))
+        else:  # [48] RAG 먼저, [84] 그다음 잡알리오 공고 원문, [57] 같은 단계 안에서는 건양대 자료 먼저
+            nums.sort(key=lambda n: (PROVIDER_RANK.get(self.docs[n].provider, 2), not is_school_doc(self.docs[n], None)))
         readable = [n for n in nums if self.readable(n)]
-        nums = readable if len(readable) >= MIN_READABLE else readable + [n for n in nums if n not in readable]
-        return nums, self.render_titles(nums) if nums else ""
+        return readable if len(readable) >= MIN_READABLE else readable + [n for n in nums if n not in readable]
 
     def _activity_tier(self, num: str) -> int:
         """[61] 활동·공모전·교과목 목록 단계: 0 외부, 1 건양대, 2 교육과정 자료."""
@@ -426,11 +461,11 @@ def apply_caps(cards: list[EvidenceCard]) -> tuple[list[EvidenceCard], dict[str,
 class ExtractionResult(BaseModel):
     job: TargetJob = Field(description="1단계 결과")
     docs: list[EvidenceDoc] = Field(description="근거 풀 전체 (D번호 순)")
-    selected: list[str] = Field(description="계획 LLM이 읽기로 고른 문서의 doc_id")
+    selected: list[str] = Field(description="에이전트 LLM이 읽기로 고른 문서의 doc_id")
     cards: list[EvidenceCard] = Field(description="원문 대조를 통과한 카드")
     rejected: list[CardDraft] = Field(description="원문에서 인용을 찾지 못해 버린 카드")
     queries: list[str]
-    query_slots: dict[str, str] = Field(default_factory=dict, description="[37] 검색어 → 그 검색어를 만든 슬롯")
+    query_slots: dict[str, str] = Field(default_factory=dict, description="[37] 검색어 → 그 검색어를 쓴 슬롯")
     slots: dict[str, int] = Field(default_factory=dict, description="[33] 슬롯별 채운 수 (상한 적용 후). 채용 요건·포트폴리오는 고유 근거 문서 수, [57] 항목 슬롯은 서로 다른 과목·활동·자격증 수")
     not_school: int = Field(default=0, description="[33] 교과목 카드인데 건양대 문서가 아니라 버린 수")
     over_cap: int = Field(default=0, description="[43] 문서당 카드 상한(MAX_CARDS_PER_DOC)을 넘어 버린 수")
@@ -441,33 +476,27 @@ class ExtractionResult(BaseModel):
     not_course: int = Field(default=0, description="[60] 학교 DB 문서도 아니고 과목 코드도 없어 버린 교과목 카드 수")
     not_activity: int = Field(default=0, description="[60] item에 활동을 나타내는 말이 없어 버린 활동 카드 수")
     to_school: int = Field(default=0, description="[59] 건양대 문서의 대외활동 카드 중 item·quote에 \"건양대\"가 있어 교내프로그램으로 고친 수")
-    rounds: list["RoundLog"] = Field(default_factory=list, description="추출 루프 바퀴별 기록")
-    timings: dict[str, float] = Field(description="단계별 소요 시간(초, 바퀴 합계)")
+    rounds: list["RoundLog"] = Field(default_factory=list, description="[74] 슬롯 대화별 기록")
+    timings: dict[str, float] = Field(description="역할별 소요 시간(초, 합계): agent·search·fetch·read")
+    # 5단계 검증(마감일 확인)용 본문. 근거 풀 항목(EvidenceDoc)에는 본문을 넣지 않는 규칙이라 따로 둔다.
+    # 카드가 나온 문서만 담고, JSON 출력(model_dump)에는 넣지 않는다
+    texts: dict[str, str] = Field(default_factory=dict, exclude=True, description="doc_id → 본문 (카드가 나온 문서만)")
 
 
 class RoundLog(BaseModel):
-    """추출 루프 한 바퀴 기록."""
+    """[74] 슬롯 대화 하나의 기록."""
+    slot: str
     queries: list[str]
-    selected: list[str] = Field(description="이번 바퀴에 읽은 문서의 doc_id")
-    picked: dict[str, list[str]] = Field(default_factory=dict, description="[37] 슬롯 → 그 슬롯을 위해 고른 doc_id")
-    cards: int = Field(description="이번 바퀴에 새로 통과한 카드 수")
-    slots: dict[str, int] = Field(description="[33] 바퀴가 끝났을 때 슬롯별 채운 문서 수")
+    selected: list[str] = Field(description="이 대화에서 읽은 문서의 doc_id")
+    tool_calls: list[dict] = Field(default_factory=list, description="LLM이 부른 도구 순서: {turn, tool, args, result}")
+    turns: int = Field(default=0, description="LLM 턴 수")
+    stop: str = Field(default="", description="끝난 이유: filled(슬롯 참) / agent(LLM이 끝냄) / turns / time / idle / error")
+    cards: int = Field(description="이 대화에서 새로 통과한 카드 수")
+    slots: dict[str, int] = Field(description="[33] 대화가 끝났을 때 슬롯별 채운 수")
     seconds: float
 
 
 ExtractionResult.model_rebuild()
-
-
-def plan_queries(target: str, slot: str, n: int, filled: int, used: list[str]) -> list[str]:
-    """[37] 계획 LLM(새 대화): 슬롯 하나의 검색어 n개. used(이 슬롯에서 이미 쓴 검색어)를 보여 준다."""
-    task, directions = SLOT_TASKS[slot]
-    messages = [{"role": "system", "content": PLAN_SYSTEM},
-                {"role": "user", "content": PLAN_REQUEST.format(
-                    target=target, slot=slot, filled=filled, need=SLOTS[slot][1], task=task,
-                    directions="\n".join(f"- {d}" for d in directions),
-                    used=", ".join(f'"{q}"' for q in used) if used else "없음", n=n)}]
-    msg = chat(messages, PLANNER, format=SearchPlan.model_json_schema())
-    return [q.strip() for q in SearchPlan.model_validate(json.loads(msg["content"])).queries if q.strip()]
 
 
 class RagState:
@@ -488,64 +517,6 @@ class RagState:
             self.enabled, self.error = False, str(e)
             log(f"RAG 검색 실패 — 이번 실행은 검색 API로만 진행: {e}")
             return None
-
-
-def plan_search(target: str, pool: EvidencePool, slots: dict[str, int], filled: dict[str, int],
-                used: dict[str, str], log=print, rag: RagState | None = None) -> list[str]:
-    """계획: 슬롯마다 검색어를 받아 코드가 검색한다. slots = 슬롯 → 검색어 수, used = 지금까지 쓴 검색어 → 슬롯.
-
-    같은 검색어(공백·대소문자 무시)는 같은 결과라 다시 검색하지 않는다 ([34]: 2바퀴에서 1바퀴 검색어를 그대로 되풀이).
-    [48] 검색어마다 RAG를 먼저 찾아 풀에 넣고(D번호가 앞), 이어서 검색 API 결과를 넣는다.
-    """
-    seen = {_norm(q).lower() for q in used}
-    new = []
-    for slot, n in slots.items():
-        mine = [q for q, s in used.items() if s == slot]
-        for query in plan_queries(target, slot, n, filled.get(slot, 0), mine)[:n]:
-            if _norm(query).lower() in seen:
-                log(f"[{slot}] 검색어 중복(실행 안 함): {query}")
-                continue
-            seen.add(_norm(query).lower())
-            used[query] = slot
-            new.append(query)
-            if rag is not None and (hit := rag.search(query, slot, log)) is not None:
-                nums = pool.add(hit, slot)
-                log(f"[{slot}] RAG: {query} → 문서 {len(nums)}건" + (f" {nums}" if nums else ""))
-            res = search_requirements(query, per_source=PER_SOURCE, max_fetch=0)
-            nums = pool.add(res, slot)
-            log(f"[{slot}] 검색: {query} → 문서 {len(nums)}건" + (f" (실패: {', '.join(res.errors)})" if res.errors else ""))
-    return new
-
-
-def select_docs(target: str, pool: EvidencePool, slot: str, max_select: int, exclude: set[str]) -> list[str]:
-    """[37] 선택 LLM(새 대화): 슬롯 하나의 검색 결과 중 아직 안 읽은 문서에서 max_select건을 고른다. 반환: D번호 목록.
-
-    exclude(이미 읽은 문서·이번 바퀴에 다른 슬롯이 고른 문서)는 목록에서 빼고, LLM이 골라도 코드가 다시 뺀다.
-    [54] RAG_WIDE_SLOTS 목록에 RAG 문서가 있으면 SCHOOL_SELECT_PER_SLOT건까지 고르게 하되, 웹 문서는 max_select건까지만 남긴다.
-    """
-    nums, titles = pool.render_slot(slot, exclude)
-    if not nums:
-        return []
-    web_cap = max_select
-    if slot == ACTIVITY:  # [61] 외부 활동을 먼저 찾으므로 웹 문서를 더 고른다
-        web_cap = max_select = max(max_select, ACTIVITY_WEB_SELECT)
-    if slot in RAG_WIDE_SLOTS and any(pool.docs[n].provider == "rag" for n in nums):
-        max_select = max(max_select, SCHOOL_SELECT_PER_SLOT)
-    messages = [{"role": "system", "content": SELECT_SYSTEM},
-                {"role": "user", "content": SELECT_REQUEST.format(
-                    target=target, slot=slot, task=SLOT_TASKS[slot][0], titles=titles,
-                    max_select=max_select, extra=SELECT_EXTRA.get(slot, ""))}]
-    msg = chat(messages, SELECTOR, format=DocSelection.model_json_schema())
-    selected = []
-    web = 0
-    for num in DocSelection.model_validate(json.loads(msg["content"])).selected:
-        if num in nums and num not in selected:
-            if pool.docs[num].provider != "rag":
-                if web >= web_cap:
-                    continue
-                web += 1
-            selected.append(num)
-    return selected[:max_select]
 
 
 def _batches(pool: EvidencePool, nums: list[str]) -> list[list[str]]:
@@ -649,141 +620,281 @@ def lacking_slots(docs: dict[str, set[str]]) -> list[str]:
     return [slot for slot, (_, need) in SLOTS.items() if filled[slot] < need]
 
 
-def extract_evidence(job: TargetJob, log=print, use_rag: bool = True) -> ExtractionResult:
-    """추출 루프: 모든 슬롯이 채워지거나 MAX_ROUNDS·MAX_SECONDS에 닿을 때까지 검색 → 선택 → 읽기 → 검증.
+class SlotAgent:
+    """[74] 2단계 실행 하나의 상태와 도구 실행. LLM은 도구를 고르고, 이 클래스가 실행·저장·세기·검증을 맡는다."""
 
-    use_rag=False면 RAG 없이 검색 API로만 (비교 시험용)."""
-    pool, timings = EvidencePool(), {"plan": 0.0, "select": 0.0, "fetch": 0.0, "read": 0.0}
-    target = make_target(job)
-    queries, read, selected_all, cards, rejected, rounds = [], set(), [], [], [], []
-    keys: set[tuple[str, str]] = set()  # 카드 중복 확인 (doc_id, quote) — 3단계 dedup_cards와 같은 기준
-    not_school = 0
-    over_cap = 0
-    past_grade = 0
-    relabeled = 0
-    to_school = 0
-    not_course = 0
-    not_activity = 0
-    grade = job.student.grade
-    start = time.time()
+    def __init__(self, job: TargetJob, log=print, use_rag: bool = True):
+        self.pool = EvidencePool()
+        self.job, self.target, self.log = job, make_target(job), log
+        self.rag = RagState(enabled=use_rag)
+        self.timings = {"agent": 0.0, "search": 0.0, "fetch": 0.0, "read": 0.0}
+        self.queries: list[str] = []
+        self.used: dict[str, str] = {}             # 검색어 → 슬롯
+        self.guard = SearchGuard()                 # [34] 같은 검색 차단, [78] 새 문서 없는 도구 빼기
+        self.read: set[str] = set()                # 읽은 D번호
+        self.selected_all: list[str] = []
+        self.cards: list[EvidenceCard] = []
+        self.rejected: list[CardDraft] = []
+        self.keys: set[tuple[str, str]] = set()    # 카드 중복 확인 (doc_id, quote) — 3단계 dedup_cards와 같은 기준
+        self.dropped = Counter()                   # 걸러낸 사유별 수
+        self.rounds: list[RoundLog] = []
+        self.filled = {slot: 0 for slot in SLOTS}
+        self.slot = ""                             # 지금 대화의 슬롯
+        self.searches_since_read = 0               # [81] 이 대화에서 마지막 읽기 뒤 실행한 검색 수
+        self.jobs_ok = jobalio.available()         # [84] 잡알리오 키가 있을 때만 search_public_jobs를 준다
 
-    used: dict[str, str] = {}  # 검색어 → 슬롯
-    rag = RagState(enabled=use_rag)
-    filled = {slot: 0 for slot in SLOTS}
-    extra = 0  # [55] 상한을 넘어 필수 슬롯만 더 돈 바퀴 수
+    def _unread(self) -> list[str]:
+        """[81] 이 대화 목록에 나왔지만 아직 안 읽은 문서."""
+        return self.pool.order([n for n in self.guard.listed if n not in self.read], self.slot)
 
-    for rnd in range(1, MAX_ROUNDS + REQUIRED_EXTRA_ROUNDS + 1):
-        # [55] 필수 슬롯(채용 요건·자격증)은 먼저 계획·선택·읽기 (출력이 잘려도 앞쪽 카드는 살아남음)
-        lacking = sorted((slot for slot, (_, need) in SLOTS.items() if filled[slot] < need),
-                         key=SLOT_PRIORITY.index)  # [56] 필수 슬롯 → 활동·공모전 → … → 교과목
-        over_time = rnd > 1 and time.time() - start > MAX_SECONDS
-        if over_time or rnd > MAX_ROUNDS:
-            # [55] 상한에 닿아도 필수 슬롯이 비어 있으면 그 슬롯만 한 바퀴 더
-            empty = [slot for slot in lacking if slot in REQUIRED_SLOTS and filled[slot] == 0]
-            if not empty or extra >= REQUIRED_EXTRA_ROUNDS:
-                why = f"시간 상한 {MAX_SECONDS}초" if over_time else "바퀴 상한"
-                log(f"{why}로 루프 종료" + (f" (필수 슬롯 비어 있음: {', '.join(empty)})" if empty else ""))
-                break
-            extra += 1
-            log(f"상한에 닿았지만 필수 슬롯이 비어 있어 그 슬롯만 한 바퀴 더: {', '.join(empty)}")
-            lacking = empty
-        t_round = time.time()
-        log(f"=== {rnd}바퀴 (카드 {len(keys)}장, 부족한 슬롯: {', '.join(lacking)})")
+    def _unread_block(self) -> str:
+        unread = self._unread()
+        return f"\n\n아직 안 읽은 문서:\n{self.pool.render_titles(unread[:UNREAD_SHOWN])}" if unread else ""
 
+    def _must_read(self) -> bool:
+        return self.searches_since_read >= SEARCH_BEFORE_READ and bool(self._unread())
+
+    def tools(self) -> list[dict]:
+        specs = [READ_TOOL_SPEC]
+        if self._must_read():
+            return specs
+        if not self.guard.exhausted("search_requirements"):
+            specs.insert(0, WEB_TOOL_SPEC)
+        if self.jobs_ok and not self.guard.exhausted("search_public_jobs"):
+            specs.insert(0, JOB_TOOL_SPEC)
+        if self.rag.enabled and not self.guard.exhausted("search_rag"):
+            specs.insert(0, RAG_TOOL_SPEC)
+        return specs
+
+    def status(self) -> str:
+        return ", ".join(f"{s} {n}/{SLOTS[s][1]}" for s, n in self.filled.items())
+
+    # ---------------------------------------------------------------- 도구 실행. 반환: (대화에 돌려줄 글, 새로 실행했는지)
+
+    def _search(self, tool: str, query, slot: str) -> tuple[str, bool]:
+        query = str(query or "").strip()
+        if not query:
+            return "query가 비어 있음. 검색어를 적어 다시 호출해.", False
+        if self._must_read():
+            return f"검색을 {self.searches_since_read}번 이어서 했다. 새로 검색하기 전에 아래 문서 중 근거가 있을 것을 read_documents로 읽어.{self._unread_block()}", False
+        if len(query.split()) > AGENT_QUERY_MAX_WORDS:
+            return f'"{query}"는 너무 길어서 실행하지 않았다. 대상 하나 + 찾는 영역 하나, 2~5단어로 줄여.', False
+        if self.guard.exhausted(tool):
+            return f"{tool}에서 새 문서가 더 나오지 않는다. 다른 도구를 쓰거나 목록의 문서를 읽거나 끝내.{self._unread_block()}", False
+        if self.guard.repeated(tool, query):
+            self.log(f"[{slot}] 검색어 중복(실행 안 함): {tool} {query}")
+            return f'"{query}"는 이 도구로 이미 검색했다. 다른 방향의 검색어를 쓰거나, 목록의 문서를 읽거나, 끝내.{self._unread_block()}', False
+        if query not in self.used:
+            self.used[query] = slot
+            self.queries.append(query)
         t = time.time()
-        counts = FIRST_QUERIES if rnd == 1 else NEXT_QUERIES
-        new_q = plan_search(target, pool, {slot: counts.get(slot, 1) for slot in lacking}, filled, used, log, rag)
-        queries += new_q
-        timings["plan"] += time.time() - t
+        if tool == "search_rag":
+            res = self.rag.search(query, slot, self.log)
+            if res is None:
+                return "DB 검색을 쓸 수 없다. search_requirements를 써.", False
+        elif tool == "search_public_jobs":
+            res = search_public_jobs(query)
+        else:
+            res = search_requirements(query, per_source=PER_SOURCE, max_fetch=0)
+        nums = self.pool.add(res, slot)
+        self.timings["search"] += time.time() - t
+        self.searches_since_read += 1
+        self.log(f"[{slot}] {tool}: {query} → 문서 {len(nums)}건" + (f" (실패: {', '.join(res.errors)})" if res.errors else ""))
+        shown = self.pool.order([n for n in self.guard.fresh(tool, nums) if n not in self.read], slot)
+        if not shown:
+            return f'"{query}" 결과에 새 문서가 없다. {self.guard.hint(self._search_tools())}아직 안 읽은 문서를 읽거나 다른 검색어·도구를 써.{self._unread_block()}', True
+        more = f"\n(외 {len(shown) - AGENT_LIST_MAX}건 생략)" if len(shown) > AGENT_LIST_MAX else ""
+        return f'"{query}" 결과:\n{self.pool.render_titles(shown[:AGENT_LIST_MAX])}{more}\n\n{SEARCH_NEXT}', True
 
+    def _pick(self, docs, slot: str) -> tuple[list[str], list[str]]:
+        """read_documents 인자에서 읽을 D번호를 고른다. 반환: (읽을 것, 못 읽는 것과 이유).
+        상한: 기본 SELECT_PER_SLOT(채울 수가 1 남았으면 1), 활동 슬롯은 웹 ACTIVITY_WEB_SELECT건·RAG SCHOOL_SELECT_PER_SLOT건까지."""
+        nums = list(dict.fromkeys(re.findall(r"D[0-9]+", json.dumps(docs, ensure_ascii=False))))
+        web_cap = total_cap = max(1, min(SELECT_PER_SLOT, SLOTS[slot][1] - self.filled[slot]))
+        if slot == ACTIVITY:  # [61] 외부 활동을 먼저 찾으므로 웹 문서를 더 읽는다
+            web_cap = total_cap = max(total_cap, ACTIVITY_WEB_SELECT)
+        ok, skipped, web = [], [], 0
+        for num in nums:
+            if num not in self.pool.docs:
+                skipped.append(f"{num}: 목록에 없는 번호")
+            elif num in self.read:
+                skipped.append(f"{num}: 이미 읽음")
+            else:
+                is_rag = self.pool.docs[num].provider == "rag"
+                wide = is_rag and slot in RAG_WIDE_SLOTS  # [54] 짧은 RAG 문서는 한 번에 더
+                if (not is_rag and web >= web_cap) or len(ok) >= (max(total_cap, SCHOOL_SELECT_PER_SLOT) if wide else total_cap):
+                    skipped.append(f"{num}: 한 번에 읽는 수를 넘음 (다음 호출에)")
+                else:
+                    web += not is_rag
+                    ok.append(num)
+        return ok, skipped
+
+    def _read(self, docs, slot: str) -> tuple[str, bool]:
+        nums, skipped = self._pick(docs, slot)
+        note = ("\n못 읽음: " + "; ".join(skipped)) if skipped else ""
+        if not nums:
+            return f"읽을 문서가 없다.{note}\n검색 결과 목록의 [D번호]를 고르거나 새로 검색해.", False
+        self.searches_since_read = 0
         t = time.time()
-        selected, picked, slot_of = [], {}, {}
-        for slot in lacking:  # [37] 슬롯마다 따로 고른다. 이미 읽었거나 이번 바퀴에 다른 슬롯이 고른 문서는 뺀다
-            n = min(SELECT_PER_SLOT, SLOTS[slot][1] - filled[slot])
-            nums = select_docs(target, pool, slot, n, read | set(selected))
-            picked[slot] = nums
-            for num in nums:
-                slot_of[num] = slot
-            selected += nums
-        timings["select"] += time.time() - t
-        log("선택: " + " / ".join(f"{slot} {nums}" for slot, nums in picked.items()))
-        if not selected:
-            log("읽을 새 문서가 없어 루프 종료")
-            break
-
+        self.pool.fetch(nums)
+        self.timings["fetch"] += time.time() - t
+        self.log(f"[{slot}] 읽기: {nums} (본문 {sum(self.pool.docs[n].doc_id in self.pool.texts for n in nums)}/{len(nums)}건)")
         t = time.time()
-        pool.fetch(selected)
-        timings["fetch"] += time.time() - t
-        log(f"본문 수집: {sum(pool.docs[n].doc_id in pool.texts for n in selected)}/{len(selected)}건")
+        drafts = read_cards(self.target, self.pool, nums, self.log, {n: slot for n in nums})
+        self.timings["read"] += time.time() - t
+        by_doc, rejected = self._accept(drafts, nums)
+        self.read.update(nums)
+        self.selected_all += nums
+        self.filled = fill_counts(slot_docs(self.cards))
+        self.log(f"카드 {len(drafts)}장 중 통과 {sum(len(v) for v in by_doc.values())}장 → 슬롯 {self.status()}")
+        lines = []
+        for num in nums:
+            items = by_doc.get(num, [])
+            kind = "본문" if self.pool.docs[num].doc_id in self.pool.texts else "요약만"
+            lines.append(f"[{num}] ({kind}) " + (f"카드 {len(items)}장: {', '.join(items)}" if items else "근거 없음"))
+        if rejected:
+            lines.append(f"원문에 없어 버린 카드 {rejected}장")
+        left = SLOTS[slot][1] - self.filled[slot]
+        tail = f"이 슬롯 {self.filled[slot]}/{SLOTS[slot][1]}. 아직 {left}개 부족하다. 이번 결과를 보고 다음에 무엇을 할지 정해." \
+            if left > 0 else f"이 슬롯 {self.filled[slot]}/{SLOTS[slot][1]}."
+        return "\n".join(lines) + note + f"\n\n{tail}", True
 
-        t = time.time()
-        drafts = read_cards(target, pool, selected, log, slot_of)
-        timings["read"] += time.time() - t
-
-        new_cards = 0
-        per_doc = Counter(c.doc_id for c in cards)
+    def _accept(self, drafts: list[CardDraft], nums: list[str]) -> tuple[dict[str, list[str]], int]:
+        """원문 대조와 카드 걸러내기. 통과한 카드를 저장하고 (D번호 → 통과한 item 목록, 버린 수)를 돌려준다."""
+        pool, grade = self.pool, self.job.student.grade
+        per_doc = Counter(c.doc_id for c in self.cards)
+        by_doc: dict[str, list[str]] = {}
+        rejected = 0
         for draft in drafts:
-            card = verify(draft, pool, selected)
+            card = verify(draft, pool, nums)
             if card is None:
-                rejected.append(draft)
+                self.rejected.append(draft)
+                rejected += 1
                 continue
+            num = draft.doc.strip("[] ")
             # [33] 교과목인데 건양대 문서가 아니면(다른 대학 교육과정 등) 버린다.
             # [57] 교내프로그램인데 건양대 문서가 아니면 외부 활동이므로 대외활동으로 고친다
-            if card.category in SCHOOL_CATEGORIES and not is_school_doc(
-                    pool.docs[draft.doc.strip("[] ")], pool.texts.get(card.doc_id)):
+            if card.category in SCHOOL_CATEGORIES and not is_school_doc(pool.docs[num], pool.texts.get(card.doc_id)):
                 if card.category == "교과목":
-                    not_school += 1
+                    self.dropped["not_school"] += 1
                     continue
                 card.category = "대외활동"
-                relabeled += 1
+                self.dropped["relabeled"] += 1
             # [59] 건양대 문서의 외부 활동 카드인데 건양대 행사면(예: "AI·SW중심대학 디지털 경진대회", 건양대 SW중심대학) 교내프로그램
             elif card.category == "대외활동" and (SCHOOL_EVENT_MARK in card.item or SCHOOL_EVENT_MARK in card.quote) \
-                    and is_school_doc(pool.docs[draft.doc.strip("[] ")], pool.texts.get(card.doc_id)):
+                    and is_school_doc(pool.docs[num], pool.texts.get(card.doc_id)):
                 card.category = "교내프로그램"
-                to_school += 1
+                self.dropped["to_school"] += 1
             # [60] 교과목은 학교 DB(RAG) 문서이거나 quote에 과목 코드가 있을 때만 (웹 뉴스의 "의료 AI"·"데이터 분석" 같은 문구가 과목으로 들어옴)
-            if card.category == "교과목" and pool.docs[draft.doc.strip("[] ")].provider != "rag" \
-                    and not COURSE_CODE.search(card.quote):
-                not_course += 1
+            if card.category == "교과목" and pool.docs[num].provider != "rag" and not COURSE_CODE.search(card.quote):
+                self.dropped["not_course"] += 1
                 continue
             # [60] 활동 카드인데 item에 활동을 나타내는 말(대회·공모전·캠프·프로그램·인턴 …)이 없으면 버린다
             if card.category in ("교내프로그램", "대외활동") and not ACTIVITY_WORD.search(card.item):
-                not_activity += 1
+                self.dropped["not_activity"] += 1
                 continue
             # [54] 학생 학년보다 낮은 학년 과목 (학년을 모르면 남김)
             if card.category == "교과목" and grade and card.grade and card.grade < grade:
-                past_grade += 1
+                self.dropped["past_grade"] += 1
                 continue
             # [43] 문서당 카드 상한. LLM이 중요한 것부터 쓰게 했으므로 앞에서부터 남긴다
             if per_doc[card.doc_id] >= MAX_CARDS_PER_DOC:
-                over_cap += 1
+                self.dropped["over_cap"] += 1
                 continue
             per_doc[card.doc_id] += 1
-            cards.append(card)
-            if (card.doc_id, _norm(card.quote)) not in keys:
-                keys.add((card.doc_id, _norm(card.quote)))
-                new_cards += 1
-        read.update(selected)
-        selected_all += selected
-        docs = slot_docs(cards)
-        filled = fill_counts(docs)
-        rounds.append(RoundLog(queries=new_q, selected=[pool.docs[n].doc_id for n in selected],
-                               picked={s: [pool.docs[n].doc_id for n in ns] for s, ns in picked.items()},
-                               cards=new_cards, slots=filled, seconds=round(time.time() - t_round, 1)))
-        log(f"카드 {len(drafts)}장 중 새로 통과 {new_cards}장 → 슬롯 "
-            + ", ".join(f"{s} {n}/{SLOTS[s][1]}" for s, n in filled.items()))
-        if not lacking_slots(docs):
-            break
+            self.cards.append(card)
+            if (card.doc_id, _norm(card.quote)) not in self.keys:
+                self.keys.add((card.doc_id, _norm(card.quote)))
+                by_doc.setdefault(num, []).append(card.item)
+        return by_doc, rejected
 
-    cards, capped = apply_caps(cards)
+    def _search_tools(self) -> list[str]:
+        return (["search_rag"] if self.rag.enabled else []) + ["search_requirements"] + (["search_public_jobs"] if self.jobs_ok else [])
+
+    def _run_tool(self, name: str, args: dict, slot: str) -> tuple[str, bool]:
+        if name in self._search_tools():
+            return self._search(name, args.get("query"), slot)
+        if name == "read_documents":
+            return self._read(args.get("docs"), slot)
+        return f"{name}이라는 도구는 없다. {', '.join(self._search_tools())}, read_documents 중에서 써.", False
+
+    # ---------------------------------------------------------------- 슬롯 대화 (LLM ↔ 도구 루프)
+
+    def run_slot(self, slot: str, deadline: float) -> None:
+        """가이드 슬롯 하나를 새 대화에서 채운다. 다음에 무엇을 할지는 LLM이 도구 호출로 정한다."""
+        started, cards_before, read_before = time.time(), len(self.keys), len(self.selected_all)
+        queries_before = len(self.queries)
+        task, directions = SLOT_TASKS[slot]
+        used = [q for q, s in self.used.items() if s == slot]
+        messages = [{"role": "system", "content": AGENT_SYSTEM},
+                    {"role": "user", "content": AGENT_REQUEST.format(
+                        target=self.target, slot=slot, filled=self.filled[slot], need=SLOTS[slot][1], task=task,
+                        directions="\n".join(f"- {d}" for d in directions),
+                        used=", ".join(f'"{q}"' for q in used) if used else "없음", extra=SLOT_EXTRA.get(slot, ""))}]
+        self.guard.new_conversation()
+        self.slot, self.searches_since_read = slot, 0
+        nudges, cards_at_nudge = 0, 0
+        self.log(f"=== [{slot}] 에이전트 시작 (슬롯 {self.status()})")
+
+        def on_text(_text: str) -> str | None:
+            """LLM이 끝내려 함. 슬롯이 부족하면 되묻는다. 두 번째는 앞 되묻기 뒤 카드가 늘었을 때만."""
+            nonlocal nudges, cards_at_nudge
+            if self.filled[slot] >= SLOTS[slot][1] or nudges >= AGENT_NUDGES or (nudges and len(self.keys) == cards_at_nudge):
+                return None
+            nudges, cards_at_nudge = nudges + 1, len(self.keys)
+            mine = [q for q, s in self.used.items() if s == slot]
+            return AGENT_NUDGE.format(slot=slot, filled=self.filled[slot], need=SLOTS[slot][1],
+                                      hint=self.guard.hint(self._search_tools()),
+                                      used=", ".join(f'"{q}"' for q in mine) or "없음")
+
+        def add_seconds(seconds: float) -> None:
+            self.timings["agent"] += seconds
+
+        res = run_tool_loop(messages, AGENT, tools=self.tools, run_tool=lambda name, args: self._run_tool(name, args, slot),
+                            on_text=on_text, max_turns=AGENT_MAX_TURNS, idle_turns=AGENT_IDLE_TURNS, deadline=deadline,
+                            done=lambda: self.filled[slot] >= SLOTS[slot][1], on_chat=add_seconds, log=self.log)
+        turns, calls_log = res.turns, res.calls
+        stop = "filled" if res.stop == "done" else res.stop
+        self.log(f"[{slot}] 에이전트 끝 ({stop}, {turns}턴, 도구 {len(calls_log)}번)")
+        self.rounds.append(RoundLog(
+            slot=slot, queries=self.queries[queries_before:], tool_calls=calls_log, turns=turns, stop=stop,
+            selected=[self.pool.docs[n].doc_id for n in self.selected_all[read_before:]],
+            cards=len(self.keys) - cards_before, slots=dict(self.filled), seconds=round(time.time() - started, 1)))
+
+
+def extract_evidence(job: TargetJob, log=print, use_rag: bool = True) -> ExtractionResult:
+    """슬롯마다 도구 호출 에이전트를 돌려 근거 카드를 모은다. use_rag=False면 RAG 없이 검색 API로만 (비교 시험용)."""
+    agent = SlotAgent(job, log, use_rag)
+    start = time.time()
+    # [55] 필수 슬롯(채용 요건·자격증)부터. 슬롯 몫 시간은 채울 수에 비례하고, 남은 시간은 뒤 슬롯으로 넘어간다
+    for i, slot in enumerate(SLOT_PRIORITY):
+        if agent.filled[slot] >= SLOTS[slot][1]:
+            continue
+        left = MAX_SECONDS - (time.time() - start)
+        if left <= 0 and not (slot in REQUIRED_SLOTS and agent.filled[slot] == 0):
+            log(f"시간 상한 {MAX_SECONDS}초로 [{slot}] 건너뜀")
+            continue
+        weight = sum(SLOTS[s][1] for s in SLOT_PRIORITY[i:] if agent.filled[s] < SLOTS[s][1])
+        agent.run_slot(slot, time.time() + max(0, left) * SLOTS[slot][1] / weight)
+    # [55] 그래도 비어 있는 필수 슬롯은 대화를 한 번 더 연다 (이미 쓴 검색어를 보여 주므로 다른 방향으로 찾게 됨)
+    for slot in REQUIRED_SLOTS:
+        if agent.filled[slot] == 0:
+            log(f"필수 슬롯이 비어 있어 한 번 더: {slot}")
+            agent.run_slot(slot, time.time() + REQUIRED_EXTRA_SECONDS)
+
+    pool = agent.pool
+    cards, capped = apply_caps(agent.cards)
     if capped:
         log("추천 상한으로 뺀 항목: " + ", ".join(f"{s} {n}개" for s, n in capped.items()))
+    d = agent.dropped
     return ExtractionResult(
-        job=job, docs=list(pool.docs.values()), selected=[pool.docs[n].doc_id for n in selected_all],
-        past_grade=past_grade, capped=capped, relabeled=relabeled, to_school=to_school,
-        not_course=not_course, not_activity=not_activity,
-        cards=cards, rejected=rejected, queries=queries, query_slots=used, rounds=rounds, not_school=not_school, over_cap=over_cap,
-        rag_error=rag.error,
+        job=job, docs=list(pool.docs.values()), selected=[pool.docs[n].doc_id for n in agent.selected_all],
+        past_grade=d["past_grade"], capped=capped, relabeled=d["relabeled"], to_school=d["to_school"],
+        not_course=d["not_course"], not_activity=d["not_activity"],
+        cards=cards, rejected=agent.rejected, queries=agent.queries, query_slots=agent.used, rounds=agent.rounds,
+        not_school=d["not_school"], over_cap=d["over_cap"],
+        rag_error=agent.rag.error,
         slots=fill_counts(slot_docs(cards)),
-        timings={k: round(v, 1) for k, v in timings.items()},
+        timings={k: round(v, 1) for k, v in agent.timings.items()},
+        texts={i: t for i, t in pool.texts.items() if i in {c.doc_id for c in cards}},
     )

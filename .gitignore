@@ -50,3 +50,4 @@ data/raw/
 !/data/reports/skill_mapping/course_skill_missed_existing_review.csv
 !/data/reports/skill_mapping/careerquest_new_skill_proposals_2026.csv
 !/data/reports/skill_readiness/06_skill_candidate_evidence.csv
+eval/results/
