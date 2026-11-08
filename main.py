@@ -1,5 +1,6 @@
 from __future__ import annotations
-
+import os
+from fastapi.middleware.cors import CORSMiddleware
 from typing import Any
 
 import uvicorn
@@ -40,7 +41,27 @@ app = FastAPI(
     version="0.2.0",
 )
 
+# 개발 환경 프론트엔드 접속 허용
+# 실제 프론트 주소는 환경변수로 변경 가능
+cors_origins = [
+    origin.strip()
+    for origin in os.getenv(
+        "CAREERQUEST_CORS_ORIGINS",
+        "http://localhost:5173,"
+        "http://127.0.0.1:5173,"
+        "http://localhost:3000,"
+        "http://127.0.0.1:3000",
+    ).split(",")
+    if origin.strip()
+]
 
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=cors_origins,
+    allow_credentials=False,
+    allow_methods=["GET", "POST", "OPTIONS"],
+    allow_headers=["Content-Type", "Authorization"],
+)
 # ============================================================
 # DB 조회 공통
 # ============================================================
