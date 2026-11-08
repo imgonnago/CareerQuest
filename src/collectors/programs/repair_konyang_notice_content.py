@@ -20,6 +20,7 @@ from src.db.models import (
     SourceDocument,
 )
 from src.loaders.common import sha256_text
+from src.collectors.programs.notice_quality import classify_notice
 
 
 SOURCE_GROUPS = {
@@ -504,8 +505,10 @@ def main() -> None:
                 doc.title,
             )
             for doc in docs
-            if args.refresh_all
-            or missing(doc)
+            if (args.refresh_all or missing(doc))
+            and not (doc.raw_metadata or {}).get(
+                "program_review_approved", False
+            )
         ]
 
     if args.limit:
@@ -579,6 +582,14 @@ def main() -> None:
                         "예상 밖의 사이트 이동"
                     )
 
+                if (
+                    "sitemap" in final_url.path.lower()
+                    or "login" in final_url.path.lower()
+                ):
+                    raise ValueError(
+                        "Non-article redirect blocked"
+                    )
+
                 response.encoding = (
                     response.apparent_encoding
                     or response.encoding
@@ -589,9 +600,10 @@ def main() -> None:
                     title or "",
                 )
 
-                usable = (
-                    len(extracted.body) >= 80
+                quality = classify_notice(
+                    extracted.body, title or ""
                 )
+                usable = quality == "BODY_REVIEW"
 
                 print(
                     f"[{index}/{len(targets)}] "
@@ -611,10 +623,7 @@ def main() -> None:
                         ),
                     )
 
-                elif (
-                    usable
-                    or extracted.attachment
-                ):
+                elif usable:
 
                     with SessionLocal() as db:
 
@@ -633,6 +642,7 @@ def main() -> None:
                         )
 
                         metadata.update({
+                            "body_quality_status": quality,
                             "body_repaired": usable,
                             "body_text_available": usable,
                             "content_extracted": usable,
@@ -658,11 +668,9 @@ def main() -> None:
                                 )
                             )
 
-                            doc.validation_status = (
-                                "ACCEPTED"
-                            )
+                            doc.validation_status = "PENDING"
 
-                            doc.evidence_eligible = True
+                            doc.evidence_eligible = False
                             doc.fetch_status = "SUCCESS"
 
                             resource = db.get(

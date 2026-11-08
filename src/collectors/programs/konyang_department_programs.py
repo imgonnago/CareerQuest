@@ -17,7 +17,9 @@ from bs4 import BeautifulSoup
 from sqlalchemy import select
 
 from src.db.database import SessionLocal
-from src.db.models import ProgramDetail, Resource
+from src.db.models import ProgramDetail, Resource, SourceDocument
+from src.collectors.programs.notice_quality import classify_notice
+
 from src.loaders.common import (
     upsert_source_document,
     utc_now,
@@ -200,6 +202,12 @@ def fetch(
         raise RuntimeError(
             f"예상 밖의 URL 이동: {response.url}"
         )
+
+    if (
+        "sitemap" in actual.path.lower()
+        or "login" in actual.path.lower()
+    ):
+        raise RuntimeError("Non-article redirect blocked")
 
     response.encoding = (
         response.apparent_encoding
@@ -391,6 +399,24 @@ def save_rows(
         with db.begin():
 
             for notice, content, attachment in rows:
+                quality = classify_notice(content, notice.title)
+
+                approved_doc = db.scalar(
+                    select(SourceDocument).where(
+                        SourceDocument.source_name == SOURCE_NAME,
+                        SourceDocument.source_record_key ==
+                        f"{board.board_id}:{notice.notice_id}",
+                    )
+                )
+
+                if (
+                    approved_doc is not None
+                    and (approved_doc.raw_metadata or {}).get(
+                        "program_review_approved"
+                    ) is True
+                ):
+                    print(f"[SKIP APPROVED] {notice.notice_id}")
+                    continue
 
                 key = (
                     "PROGRAM:KY_DEPT:"
@@ -431,8 +457,9 @@ def save_rows(
                     "application_status": "UNKNOWN",
                     "attachment_present": attachment,
                     "attachment_content_parsed": False,
-                    "body_text_available": (
-                        len(content) >= 80
+                    "body_quality_status": quality,
+                    "body_text_available": quality in (
+                        "BODY_REVIEW", "MANUAL_REVIEW"
                     ),
                 }
 
@@ -486,15 +513,9 @@ def save_rows(
                         "KY_MEDICAL_DEPARTMENT_NOTICES"
                     ),
                     fetch_status="SUCCESS",
-                    validation_status=(
-                        "ACCEPTED"
-                        if len(content) >= 80
-                        else "PENDING"
-                    ),
+                    validation_status="PENDING",
                     trust_level="B",
-                    evidence_eligible=(
-                        len(content) >= 80
-                    ),
+                    evidence_eligible=False,
                 )
 
     return created, updated

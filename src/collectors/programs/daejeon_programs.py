@@ -124,6 +124,34 @@ TITLE_TECH_TERMS = {
 }
 
 
+TITLE_MEDICAL_TERMS = {
+    "\uac04\ud638",
+    "\ubcf4\uac74",
+    "\uc758\ub8cc",
+    "\uc758\ud559",
+    "\uc758\uc57d",
+    "\uc81c\uc57d",
+    "\ubc14\uc774\uc624",
+    "\uc784\uc0c1",
+    "GMP",
+    "\ud488\uc9c8\uad00\ub9ac",
+    "\ubcd1\uc6d0",
+    "\ubc29\uc0ac\uc120",
+    "\ubb3c\ub9ac\uce58\ub8cc",
+    "\uc791\uc5c5\uce58\ub8cc",
+    "\uc7ac\ud65c",
+    "\uce58\uc704\uc0dd",
+    "\uce58\uacfc",
+    "\uc751\uae09",
+    "\uc57d\ud559",
+    "\uc0dd\uba85\uacfc\ud559",
+    "\uc758\uacf5\ud559",
+    "\uc758\ub8cc\uae30\uae30",
+}
+
+TITLE_TECH_TERMS.update(TITLE_MEDICAL_TERMS)
+
+
 TITLE_CAREER_TERMS = {
     "취업",
     "취·창업",
@@ -265,6 +293,14 @@ PROGRAM_SIGNAL_TERMS = {
 # ============================================================
 
 TITLE_BLOCK_TERMS = {
+    # CAREERQUEST_ADMISSION_EXCLUSION_V1
+    "\uc11d\uc0ac\uacfc\uc815",
+    "\ubc15\uc0ac\uacfc\uc815",
+    "\ud559\uc704\uacfc\uc815",
+    "\uc2e0(\ud3b8)\uc785\uc0dd",
+    "\ub300\ud559\uc6d0 \uc2e0\uc785\uc0dd",
+    "\ud3b8\uc785\uc0dd \ubaa8\uc9d1",
+
     "이자지원",
     "이자 지원",
 
@@ -2965,6 +3001,36 @@ def second_stage_relevance(
 # 프로그램 상세 파싱
 # ============================================================
 
+
+def recruitment_window_is_open(
+    status: str | None,
+    start: datetime | None,
+    end: datetime | None,
+    now: datetime | None = None,
+) -> bool:
+    """Only confirm an open application with a valid date window."""
+
+    current = now if now is not None else datetime.now(SEOUL)
+    normalized = clean_text(status or "")
+
+    closed_statuses = {
+        "\ubaa8\uc9d1\ub9c8\uac10",
+        "\uc811\uc218\ub9c8\uac10",
+    }
+
+    if normalized in closed_statuses:
+        return False
+
+    if start is None or end is None:
+        return False
+
+    if start > end:
+        return False
+
+    return start <= current <= end
+
+
+
 def parse_program(
     candidate: ProgramCandidate,
     html: str,
@@ -3194,32 +3260,12 @@ def parse_program(
         candidate.list_status
     )
 
-
-    if status in {
-        "모집마감",
-        "접수마감",
-    }:
-
-        is_active = False
-
-
-    elif status in {
-        "모집중",
-        "접수중",
-        "상시",
-    }:
-
-        is_active = True
-
-
-    else:
-
-        is_active = (
-            application_end
-            is None
-            or application_end
-            >= now
-        )
+    is_active = recruitment_window_is_open(
+        status,
+        application_start,
+        application_end,
+        now,
+    )
 
 
     if (
