@@ -1343,3 +1343,41 @@ CareerQuest 문제점 · 수정할 부분 목록
           TOOLS_ASK(도구·툴·기능·검색 할 수 …)가 맞으면 지금 메시지 끝에 같은 지시(TOOLS_ASK_NOTE)를 한 번 더 붙임. 자기소개 허용은 누구·소개·건양·정체를 물을 때만으로 좁힘.
           확인: "무슨 도구 쓸 수 있어?" 2회·"너 도구호출 기능 있어?" → search_rag·search_requirements·search_public_jobs(한 번은 read_documents까지) 이름과 설명 목록. "검색도 할 수 있어?"는 이름 없이 답함, "안녕"·"SQL JOIN" 그대로.
 
+
+
+[89] 인호 DB 교과목 문서에서 개설 학년을 못 읽어 3학년 학생에게 1학년 과목(간호학개론및윤리)을 추천함 (해결)
+  - 발견: 2026-11-09, 인호 DB 스냅샷(CareerQuest_DB_AllCategories_Skill873_updated → 로컬 시험 DB careerquest_snapshot) 적재 후 간호학과 3학년 입력으로 1~5단계 실행
+  - 위치: engine/pipeline/stage2_evidence.py (verify, course_info), engine/rag/store.py (get_document), engine/tools/rag_search.py, engine/schemas/evidence.py
+  - 내용: 인호 로더의 교과목(KONYANG_CURRICULUM_PDF) source_document는 과목마다 머리글 없는 표 한 줄("필수 | 1 | 2 | 80245B | 간호학개론및윤리 | 3 | 3 | | |")이라
+          course_info가 머리글의 "학년" 칸을 못 찾아 grade=None → past_grade(학생 학년보다 낮은 과목 버림)가 안 걸림.
+  - 해결: 2026-11-09 원문에서 학년을 못 읽으면 DB course_detail 값을 씀
+  - 방법: get_document가 course_detail을 resource_id로 붙여 year_level·completion_type을 같이 돌려주고, search_rag가 EvidenceDoc.course_grade·course_type에 담음.
+          verify에서 course_info 결과가 None일 때만 그 값을 씀(교양 들어가면 교양, 나머지는 전공). 원문(본문)은 그대로 — LLM이 읽는 글은 안 바꿈.
+          예전 ingest PDF(교육과정 전체 표)는 resource_id가 없어 지금처럼 course_info만 씀.
+  - 확인: search_rag("건양대 간호학과 교육과정 간호학개론") → 간호학개론및윤리 1/필수, 임상시험개론 4/선택 등 학년이 나옴. 간호 3학년 다시 실행 결과는 아래 [90]에.
+          남은 한계: LLM이 읽는 본문 자체에는 칸 이름이 없어 읽기 LLM은 어느 숫자가 학년인지 모름(카드 학년은 코드가 정하니 추천엔 영향 없음).
+
+
+[90] 인호 DB 스냅샷으로 간호학과 학생 실행 시 드러난 문제 (미해결)
+  - 발견: 2026-11-09, 간호학과 3학년 "대학병원 간호사로 취업하려면" 1~5단계 1회 (212초, 2단계 143초)
+  - 내용: 1) 활동 슬롯 5/8 — "일반형/장기취업유지형 시니어인턴십"(노인 일자리 ESG 칼럼, 티스토리)·"과학실험 동아리"(고등학생 수시 글)가 들어감. ACTIVITY_WORD(인턴·동아리)만 보고 통과.
+          2) 자격증 TOEFL — 근거 문서는 간호사 채용 동향 글 하나. 국내 대학병원 간호사엔 맞지 않음.
+          3) Skill 사전(245개)이 IT 위주라 집계 49개 중 40개 "매핑되지 않음", job_role도 IT 8개뿐 → 간호사는 표준 직무 목록에 없음 ([85]과 같은 뿌리, 인호와 정할 것).
+          4) RAG 문서에 날짜가 안 붙음: 인호 DB의 resource.published_at·expires_at·program_detail 접수 기간이 조각 metadata(published_at)로 안 옴 →
+             정보 질문이 2018년 설문 안내·2025년 마감 공고를 골라 읽음. index.py chunk_meta에 resource 날짜를 넣는 방법이 있음 (적재 스냅샷 source_document에는 published_at 칸이 없음).
+          5) 포트폴리오 0/3 — 간호 분야 "프로젝트" 문서가 RAG·웹 모두 없음. 간호 학생에겐 슬롯 자체가 안 맞을 수 있음([85]).
+  - 참고: 스냅샷 CSV에 없는 source_type·document_type·content_hash·raw_metadata는 적재 스크립트가 규칙으로 채움(인호 원본과 다를 수 있음). 근거 가능(evidence_eligible) 5,080건 중 5,009건 색인.
+
+
+[91] 다른 학과(물리치료·경찰행정·유아교육·경영) 학생 실험에서 드러난 문제 (미해결)
+  - 발견: 2026-11-09, 스냅샷 DB로 eval students 3회씩. 결과 eval/results/20261109_195712(IT 3명+간호), eval/results/20261109_220153(다른 학과 4명)
+  - 수치(다른 학과 12회): 실패 0, 평균 233초, 슬롯 평균 75%(IT·간호 87%), 네 슬롯 모두 찬 경우 0/12, 집계 줄 "매핑되지 않음" 95%(IT·간호 75%), 인용 대조 98%.
+  - 내용: 1) RAG 데이터 없음 — 스냅샷 교육과정(course_detail)에 유아교육과·경찰행정학과·경영학과가 없음(간호 79·물리치료 73과목만 확인).
+             RAG 선택 비율 경찰 2/21·유아교육 1.3/17로 거의 웹만 씀. 인호에게 학과 범위 확인할 것.
+          2) 자격증 슬롯에 자격증이 아닌 것 — "대면수업", "보육실습", "보육교사 2급 필수 17 과목"(유아교육), "축구 심판 자격증"(물리치료).
+             학생이 이미 가진 보육교사 2급과 비슷한 항목도 나옴.
+          3) 학년·직무에 안 맞는 자격증 — 마케팅 2학년에 공인회계사·세무사·CFA Lv.3, 물리치료에 KBS 한국어능력시험.
+          4) 채용 요건에 "운전면허증", "한글", "병역필", "이듬해 2월 이전 졸업" 같은 일반 조건이 순위 안에 들어감.
+          5) 포트폴리오 — 물리치료에 "건강데이터 분석 프로젝트·비만 위험군 분석"(데이터 분석 글), 간호에 "아로마 캔들 만들기 행사 기획".
+          6) 활동 칸이 가장 덜 참(경찰 42%, 유아교육 29%). 경찰은 "청년일경험프로젝트"가 3회 모두 같은 것 하나.
+  - 참고: [85]·[90]과 같은 뿌리(슬롯·Skill 사전이 IT 기준). 계열별 슬롯 여부는 사용자와 정할 것.
