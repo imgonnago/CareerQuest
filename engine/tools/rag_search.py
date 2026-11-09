@@ -87,6 +87,7 @@ def search_rag(query: str, k: int = 5, filters: dict | None = None, doc_kinds: l
             url=row.get("source_url") or f"rag://source_document/{hit.source_document_id}",
             domain="rag", source_name=row.get("source_name"), doc_kind=hit.doc_kind,
             published_at=_published(meta),
+            course_grade=row.get("year_level"), course_type=row.get("completion_type"),
             fetch_status="ok", fetch_note=f"RAG 유사도 {hit.score:.2f}",
             retrieved_at=now, fetched_at=row.get("fetched_at"),
         ))

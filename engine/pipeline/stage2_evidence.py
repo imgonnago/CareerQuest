@@ -302,6 +302,11 @@ def verify(draft: CardDraft, pool: EvidencePool, batch: list[str] = ()) -> Evide
     grade, course_type = None, None
     if category == "교과목":
         grade, course_type = course_info(_source(pool, num), draft.quote)
+        # [89] 원문 표에서 못 읽으면 DB course_detail 값 (인호 교과목 행은 머리글 없는 한 줄: "필수 | 1 | 2 | 80245B | …")
+        if grade is None:
+            grade = doc.course_grade
+        if course_type is None and doc.course_type:
+            course_type = "교양" if "교양" in doc.course_type else "전공"
     return EvidenceCard(
         doc_id=doc.doc_id, category=category, company=draft.company, item=draft.item,
         quote=draft.quote, evidence_level="fulltext" if text is not None else "snippet",

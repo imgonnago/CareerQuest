@@ -40,6 +40,8 @@ class EvidenceDoc(BaseModel):
     source_name: str | None = Field(default=None, description="블로그·카페 이름. RAG 문서는 적재한 출처(예: 건양대학교)")
     doc_kind: str | None = Field(default=None, description="RAG 문서만: 문서 종류(교육과정·비교과·채용공고 …, 조각 metadata doc_kind)")
     published_at: int | None = Field(default=None, description="작성일 YYYYMMDD. 없으면 None")
+    course_grade: int | None = Field(default=None, description="[89] RAG 교과목 문서만: DB course_detail.year_level (개설 학년)")
+    course_type: str | None = Field(default=None, description="[89] RAG 교과목 문서만: DB course_detail.completion_type (예: 교양 필수, 필수, 선택)")
 
     fetch_status: FetchStatus
     fetch_note: str | None = Field(default=None, description="수집 실패·차단 사유")

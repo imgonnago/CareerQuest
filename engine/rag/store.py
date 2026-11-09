@@ -200,8 +200,10 @@ def search(query: str, k: int = 5, filters: dict | None = None, min_score: float
 def get_document(source_document_id: int) -> dict | None:
     """문서 본문 전체와 출처. 검색으로 찾은 문서를 LLM이 읽을 때 쓴다."""
     with _engine().connect() as conn:
+        # [89] 인호 DB의 교과목 행은 본문이 머리글 없는 표 한 줄이라 학년을 원문에서 못 읽음 → course_detail 값을 같이 준다
         r = conn.execute(text("""
-            SELECT source_document_id, title, content, source_name, source_url, document_type, raw_metadata,
-                   fetched_at
-            FROM source_document WHERE source_document_id = :id"""), {"id": source_document_id}).mappings().first()
+            SELECT d.source_document_id, d.title, d.content, d.source_name, d.source_url, d.document_type,
+                   d.raw_metadata, d.fetched_at, cd.year_level, cd.completion_type
+            FROM source_document d LEFT JOIN course_detail cd ON cd.resource_id = d.resource_id
+            WHERE d.source_document_id = :id"""), {"id": source_document_id}).mappings().first()
     return dict(r) if r else None
