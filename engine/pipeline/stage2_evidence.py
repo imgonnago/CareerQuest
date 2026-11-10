@@ -88,8 +88,9 @@ ACTIVITY_WORD = re.compile(
     r"특강|세미나|포럼|설명회|박람회|컨퍼런스|conference|워크숍|workshop|학회|동아리|봉사|연수|현장실습|산학|교육|아카데미|academy|"
     r"부트캠프|스터디|프로젝트|project|페스티벌|축제|경연", re.I)
 # [58] 활동·공모전·교과목 안에서 남기는 순서 (작을수록 먼저). 교과목은 그 안에서 교양 → 전공 → 모름
-# [61] 외부 활동·공모전(검색 API) → 건양대 교내 활동 → 교과목. [58]~[60]은 교내 → 외부 → 교과목이었음
-ACTIVITY_RANK = {"대외활동": 0, "교내프로그램": 1, "교과목": 2}
+# [92] 추천 순서: 교내프로그램 → 외부 대외활동 → 교과목 (사용자 결정, [58]~[60]과 같음). 검색은 건양대 자료(RAG)를 먼저 하고
+# 외부 검색은 못 채운 칸만 (SCHOOL_FIRST_SEARCHES). [61] 실험은 대외활동 → 교내 → 교과목
+ACTIVITY_RANK = {"교내프로그램": 0, "대외활동": 1, "교과목": 2}
 # [59] 루프에서 교과목은 활동·공모전·교과목 8칸 중 이만큼까지만 채운 것으로 센다. 교육과정 1건에서 과목 6개가 한 번에 나와
 # 1바퀴에 6칸이 차서 활동 검색이 멈춘 일이 있음 (최종 8개는 apply_caps가 교내 → 외부 → 교과목 순으로 남김)
 COURSE_FILL_MAX = 3
@@ -122,11 +123,14 @@ SLOT_DOC_KINDS: dict[str, list[str]] = {
     ACTIVITY: ["비교과", "교내프로그램", "공모전", "대외활동", "지역프로그램", "교육과정", "수업계획서", "로드맵"],
     "추천 포트폴리오": ["프로젝트"],
 }
-# [61] 활동·공모전·교과목 선택 목록 순서: 외부(검색 API 문서, RAG 공모전·지역 프로그램) → 건양대(웹 건양대 문서, RAG 비교과) → 교육과정.
-# [58]~[60]은 RAG 먼저·교내 먼저였음 (RAG 6건까지 골라 교육과정 등이 자리를 먼저 차지하고 외부 글은 바퀴당 2건만 읽힘)
-ACTIVITY_KIND_RANK = {"공모전": 0, "대외활동": 0, "지역프로그램": 0, "비교과": 1, "교내프로그램": 1,
-                      "교육과정": 2, "수업계획서": 2, "로드맵": 2}
-ACTIVITY_WEB_SELECT = 4  # [61] 활동·공모전·교과목에서 read_documents 한 번에 읽을 웹 문서 상한 (다른 슬롯은 SELECT_PER_SLOT)
+# [92] 활동·공모전·교과목 선택 목록 순서: 건양대 활동(RAG 비교과·교내프로그램, 웹 건양대 문서) → 건양대 교육과정 →
+# 외부(RAG 공모전·대외활동·지역프로그램, 웹 비건양대 문서). 같은 단계 안에서는 RAG 먼저. ([61] 실험은 외부 → 건양대 → 교육과정)
+ACTIVITY_KIND_RANK = {"비교과": 0, "교내프로그램": 0, "교육과정": 1, "수업계획서": 1, "로드맵": 1,
+                      "공모전": 2, "대외활동": 2, "지역프로그램": 2}
+ACTIVITY_WEB_SELECT = 2  # 활동·공모전·교과목에서 read_documents 한 번에 읽을 웹 문서 상한. [61] 실험에서 4, [92] 외부는 빈칸만 채우므로 2로
+# [92] 활동 슬롯은 search_rag를 이만큼 실행하고 그 뒤 read_documents를 한 번 해야 웹·잡알리오 검색을 연다 (건양대 자료 먼저).
+# RAG가 꺼졌거나 search_rag에서 새 문서가 더 안 나오면(SearchGuard.exhausted) 바로 연다
+SCHOOL_FIRST_SEARCHES = 2
 AGENT_MAX_TURNS = 12    # [74] 슬롯 대화 하나의 LLM 턴 상한
 AGENT_IDLE_TURNS = 2    # [74] 새로 실행된 도구가 없는 턴(같은 검색어 되풀이 등)이 이만큼 이어지면 그 슬롯을 끝낸다 ([34])
 AGENT_NUDGES = 2        # [78] 슬롯이 부족한 채 끝내려 할 때 되묻는 횟수. 두 번째는 첫 되묻기 뒤 카드가 늘었을 때만
@@ -224,19 +228,19 @@ class EvidencePool:
     def order(self, nums: list[str], slot: str) -> list[str]:
         """슬롯 목록 순서로 정렬하고, 본문 가능 문서가 충분하면 요약만 있는 문서를 뺀다."""
         # 안정 정렬: [48] RAG 먼저, [57] 그 안에서 건양대 자료 먼저 (RAG 건양대 → RAG 기타 → 웹 건양대 → 웹)
-        if slot == ACTIVITY:  # [61] 외부 → 건양대 → 교육과정 (같은 단계 안에서는 웹 먼저)
-            nums.sort(key=lambda n: (self._activity_tier(n), self.docs[n].provider == "rag"))
+        if slot == ACTIVITY:  # [92] 건양대 활동 → 건양대 교육과정 → 외부 (같은 단계 안에서는 RAG 먼저)
+            nums.sort(key=lambda n: (self._activity_tier(n), self.docs[n].provider != "rag"))
         else:  # [48] RAG 먼저, [84] 그다음 잡알리오 공고 원문, [57] 같은 단계 안에서는 건양대 자료 먼저
             nums.sort(key=lambda n: (PROVIDER_RANK.get(self.docs[n].provider, 2), not is_school_doc(self.docs[n], None)))
         readable = [n for n in nums if self.readable(n)]
         return readable if len(readable) >= MIN_READABLE else readable + [n for n in nums if n not in readable]
 
     def _activity_tier(self, num: str) -> int:
-        """[61] 활동·공모전·교과목 목록 단계: 0 외부, 1 건양대, 2 교육과정 자료."""
+        """[92] 활동·공모전·교과목 목록 단계: 0 건양대 활동, 1 건양대 교육과정 자료, 2 외부."""
         doc = self.docs[num]
         if doc.provider == "rag":
-            return ACTIVITY_KIND_RANK.get(doc.doc_kind, 0)
-        return 1 if is_school_doc(doc, None) else 0
+            return ACTIVITY_KIND_RANK.get(doc.doc_kind, 2)
+        return 0 if is_school_doc(doc, None) else 2
 
     def render_doc(self, num: str, slot: str | None = None) -> str:
         """읽기 LLM용: 본문 전체, 없으면 요약. 본문은 자르지 않는다. slot = 이 문서를 고른 가이드 슬롯 ([37])."""
@@ -415,7 +419,7 @@ def _counted_keys(cards: list[EvidenceCard]) -> list[tuple[EvidenceCard, list[st
 
 def apply_caps(cards: list[EvidenceCard]) -> tuple[list[EvidenceCard], dict[str, int]]:
     """[57][58][60] 추천 상한으로 줄인다. 반환: (남긴 카드, 슬롯별 뺀 항목 수). 포트폴리오 3은 여러 문서에 나온 순 → 찾은 순.
-    - 활동·공모전·교과목 8: 교내프로그램 → 대외활동 → 교과목(교양 → 전공 → 모름), 같은 순위 안에서는 찾은 순
+    - 활동·공모전·교과목 8: [92] 교내프로그램 → 대외활동 → 교과목(교양 → 전공 → 모름), 같은 순위 안에서는 찾은 순
     - 자격증 4: 채용 공고(채용 요건 카드가 나온 문서)에 나온 문서 수 → 전체 문서 수 → 찾은 순"""
     counted = _counted_keys(cards)
     course_rank = {"교양": 0, "전공": 1, None: 2}
@@ -647,6 +651,8 @@ class SlotAgent:
         self.slot = ""                             # 지금 대화의 슬롯
         self.searches_since_read = 0               # [81] 이 대화에서 마지막 읽기 뒤 실행한 검색 수
         self.jobs_ok = jobalio.available()         # [84] 잡알리오 키가 있을 때만 search_public_jobs를 준다
+        self.rag_searches = 0                      # [92] 이 대화에서 실행한 search_rag 수
+        self.read_after_rag = False                # [92] 마지막 search_rag 뒤 read_documents를 했는지
 
     def _unread(self) -> list[str]:
         """[81] 이 대화 목록에 나왔지만 아직 안 읽은 문서."""
@@ -659,10 +665,19 @@ class SlotAgent:
     def _must_read(self) -> bool:
         return self.searches_since_read >= SEARCH_BEFORE_READ and bool(self._unread())
 
+    def _school_first(self) -> bool:
+        """[92] 활동 슬롯에서 아직 건양대 자료(RAG)를 먼저 찾는 중이면 True — 웹·잡알리오 검색을 열지 않는다.
+        search_rag를 SCHOOL_FIRST_SEARCHES번 하고 그 뒤 한 번 읽었거나, RAG가 꺼졌거나, search_rag에서 새 문서가 안 나오면 연다."""
+        if self.slot != ACTIVITY or not self.rag.enabled or self.guard.exhausted("search_rag"):
+            return False
+        return not (self.rag_searches >= SCHOOL_FIRST_SEARCHES and self.read_after_rag)
+
     def tools(self) -> list[dict]:
         specs = [READ_TOOL_SPEC]
         if self._must_read():
             return specs
+        if self._school_first():  # [92] 건양대 자료를 먼저 찾고 읽은 뒤에 외부 검색
+            return [RAG_TOOL_SPEC] + specs
         if not self.guard.exhausted("search_requirements"):
             specs.insert(0, WEB_TOOL_SPEC)
         if self.jobs_ok and not self.guard.exhausted("search_public_jobs"):
@@ -684,6 +699,11 @@ class SlotAgent:
             return f"검색을 {self.searches_since_read}번 이어서 했다. 새로 검색하기 전에 아래 문서 중 근거가 있을 것을 read_documents로 읽어.{self._unread_block()}", False
         if len(query.split()) > AGENT_QUERY_MAX_WORDS:
             return f'"{query}"는 너무 길어서 실행하지 않았다. 대상 하나 + 찾는 영역 하나, 2~5단어로 줄여.', False
+        if tool != "search_rag" and self._school_first():
+            step = (f"search_rag로 건양대 비교과·교내 공모전·교육과정을 {SCHOOL_FIRST_SEARCHES - self.rag_searches}번 더 찾아"
+                    if self.rag_searches < SCHOOL_FIRST_SEARCHES else "search_rag 결과 중 근거가 있을 문서를 read_documents로 읽어")
+            return (f"이 슬롯은 건양대 자료가 먼저다. 외부 검색({tool})은 건양대 자료로 못 채운 칸만 채운다. "
+                    f"먼저 {step}.{self._unread_block()}"), False
         if self.guard.exhausted(tool):
             return f"{tool}에서 새 문서가 더 나오지 않는다. 다른 도구를 쓰거나 목록의 문서를 읽거나 끝내.{self._unread_block()}", False
         if self.guard.repeated(tool, query):
@@ -697,6 +717,8 @@ class SlotAgent:
             res = self.rag.search(query, slot, self.log)
             if res is None:
                 return "DB 검색을 쓸 수 없다. search_requirements를 써.", False
+            self.rag_searches += 1
+            self.read_after_rag = False
         elif tool == "search_public_jobs":
             res = search_public_jobs(query)
         else:
@@ -716,7 +738,7 @@ class SlotAgent:
         상한: 기본 SELECT_PER_SLOT(채울 수가 1 남았으면 1), 활동 슬롯은 웹 ACTIVITY_WEB_SELECT건·RAG SCHOOL_SELECT_PER_SLOT건까지."""
         nums = list(dict.fromkeys(re.findall(r"D[0-9]+", json.dumps(docs, ensure_ascii=False))))
         web_cap = total_cap = max(1, min(SELECT_PER_SLOT, SLOTS[slot][1] - self.filled[slot]))
-        if slot == ACTIVITY:  # [61] 외부 활동을 먼저 찾으므로 웹 문서를 더 읽는다
+        if slot == ACTIVITY:  # [61][92] 활동 슬롯 웹 문서 상한 (지금은 SELECT_PER_SLOT과 같음)
             web_cap = total_cap = max(total_cap, ACTIVITY_WEB_SELECT)
         ok, skipped, web = [], [], 0
         for num in nums:
@@ -740,6 +762,7 @@ class SlotAgent:
         if not nums:
             return f"읽을 문서가 없다.{note}\n검색 결과 목록의 [D번호]를 고르거나 새로 검색해.", False
         self.searches_since_read = 0
+        self.read_after_rag = self.rag_searches > 0
         t = time.time()
         self.pool.fetch(nums)
         self.timings["fetch"] += time.time() - t
@@ -762,6 +785,8 @@ class SlotAgent:
         left = SLOTS[slot][1] - self.filled[slot]
         tail = f"이 슬롯 {self.filled[slot]}/{SLOTS[slot][1]}. 아직 {left}개 부족하다. 이번 결과를 보고 다음에 무엇을 할지 정해." \
             if left > 0 else f"이 슬롯 {self.filled[slot]}/{SLOTS[slot][1]}."
+        if slot == ACTIVITY and left > 0 and self.rag_searches and not self._school_first():
+            tail += " 건양대 자료로 못 채운 칸은 search_requirements로 외부 공모전·해커톤·대외활동을 찾아 채워."  # [92]
         return "\n".join(lines) + note + f"\n\n{tail}", True
 
     def _accept(self, drafts: list[CardDraft], nums: list[str]) -> tuple[dict[str, list[str]], int]:
@@ -838,6 +863,7 @@ class SlotAgent:
                         used=", ".join(f'"{q}"' for q in used) if used else "없음", extra=SLOT_EXTRA.get(slot, ""))}]
         self.guard.new_conversation()
         self.slot, self.searches_since_read = slot, 0
+        self.rag_searches, self.read_after_rag = 0, False
         nudges, cards_at_nudge = 0, 0
         self.log(f"=== [{slot}] 에이전트 시작 (슬롯 {self.status()})")
 

@@ -862,7 +862,7 @@ CareerQuest 문제점 · 수정할 부분 목록
           (3) 의료 AI 학생의 교내 활동이 "특강" 한 단어처럼 이름이 불분명한 경우가 있음.
           (4) [59] 실험에서 읽기 출력이 잘려 카드 0장인 바퀴가 150초를 씀([36]) — 이번 실험엔 없었지만 다시 생길 수 있음.
 
-[61] 실험: 활동·공모전·교과목 우선순위를 외부 활동·공모전(검색 API) → 건양대 → 교과목으로 (실험, 결정 대기)
+[61] 실험: 활동·공모전·교과목 우선순위를 외부 활동·공모전(검색 API) → 건양대 → 교과목으로 (실험 종료 — [92]에서 건양대 우선으로 결정)
   - 발견: 2026-11-04, 사용자 질문 ("건양대 데이터가 우선이라 줄어든 건가?") — [58]~[60]은 RAG를 6건까지 고르고 웹 문서는 바퀴당 2건이라
           교육과정 같은 학교 문서가 자리를 먼저 차지하고 외부 공모전 글은 적게 읽힘
   - 위치: engine/pipeline/stage2_evidence.py (ACTIVITY_RANK, ACTIVITY_KIND_RANK, ACTIVITY_WEB_SELECT, EvidencePool._activity_tier·render_slot, select_docs),
@@ -1381,3 +1381,26 @@ CareerQuest 문제점 · 수정할 부분 목록
           5) 포트폴리오 — 물리치료에 "건강데이터 분석 프로젝트·비만 위험군 분석"(데이터 분석 글), 간호에 "아로마 캔들 만들기 행사 기획".
           6) 활동 칸이 가장 덜 참(경찰 42%, 유아교육 29%). 경찰은 "청년일경험프로젝트"가 3회 모두 같은 것 하나.
   - 참고: [85]·[90]과 같은 뿌리(슬롯·Skill 사전이 IT 기준). 계열별 슬롯 여부는 사용자와 정할 것.
+
+
+[92] 활동·공모전·교과목을 건양대 우선으로, 외부 검색은 못 채운 칸만 (해결, 실측 전)
+  - 발견: 2026-11-10, [61] 결정 대기 항목. 사용자: "RAG에 연결됐으니 건양대 우선으로, 채워지지 않은 부분만 외부 검색으로 채우고"
+          (인호 DB 스냅샷 적재로 비교과·교육과정 RAG 문서가 생김 — [89][90])
+  - 위치: engine/pipeline/stage2_evidence.py (ACTIVITY_RANK, ACTIVITY_KIND_RANK, ACTIVITY_WEB_SELECT, SCHOOL_FIRST_SEARCHES, EvidencePool.order·_activity_tier,
+          apply_caps.activity_ranked, SlotAgent._school_first·tools·_search·_read), engine/prompts/stage2_evidence.py (SLOT_TASKS·SLOT_EXTRA 활동),
+          engine/prompts/stage4_rank.py (SLOT_RANK_GUIDE 활동)
+  - 해결: 2026-11-10 추천·목록·검색 순서를 건양대 교내 → 건양대 교과목 → 외부로, 외부 검색은 RAG를 먼저 찾고 읽은 뒤에만
+  - 방법: 1) 추천(apply_caps·4단계 프롬프트): 교내프로그램 → 대외활동 → 교과목(교양 먼저) — 사용자 결정(2026-11-10, [58]~[60]과 같은 순서).
+             처음엔 교내 → 교과목 3개 → 외부로 했다가 사용자가 교내 → 외부 → 교과목으로 정함.
+          2) 목록 순서: 건양대 활동(RAG 비교과·교내프로그램, 웹 건양대 문서) → 건양대 교육과정 → 외부(RAG 공모전·지역프로그램, 웹), 같은 단계는 RAG 먼저.
+          3) 코드 잠금: 활동 슬롯 대화에서 search_rag를 SCHOOL_FIRST_SEARCHES(2)번 하고 그 뒤 read_documents를 한 번 하기 전에는
+             search_requirements·search_public_jobs를 도구 목록에서 빼고, 불러도 실행하지 않고 되돌림. RAG가 꺼졌거나 search_rag가 새 문서를 못 내면 바로 엶.
+             건양대 자료로 8칸이 차면 기존 done 조건으로 대화가 끝나 외부 검색을 안 함. 잠금이 풀린 뒤 읽기 결과에 "못 채운 칸은 외부로" 안내를 붙임.
+             프롬프트만으로는 9B가 순서를 자주 놓쳐서([61] 실험 때 반대 방향도 같은 문제) 코드로 막음.
+          4) 웹 문서 한 번에 읽는 수 4 → 2 (ACTIVITY_WEB_SELECT, [60]과 같음). 프롬프트 검색 방향·도구 순서·4단계 순서도 같은 순서로.
+  - 확인: apply_caps 단위 확인 — 교내 2·외부 3·교과목 6(교양 3·전공 3) → 교내 2·외부 3·교양 3과목이 남고 전공 3과목이 빠짐.
+          잠금 단위 확인 — 처음·RAG 2번 검색 뒤엔 search_rag·read_documents만, 읽은 뒤 search_requirements 열림, 다른 슬롯·RAG 꺼짐은 바로 열림.
+          학생 실행(시간·슬롯 채움)은 아직 안 잼 — 스냅샷 DB(careerquest_snapshot)로 eval students 다시 잴 것.
+  - 남은 한계: (1) 스냅샷에 비교과가 적은 학과(경찰·유아교육 등, [91])는 RAG 2번 + 읽기 1번이 헛돌아 시간이 조금 늘 수 있음.
+          (2) [61]의 같은 대회 다른 이름 묶기, "교육" 단어 사업 소개 통과는 그대로.
+
