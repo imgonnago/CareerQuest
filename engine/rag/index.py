@@ -17,6 +17,7 @@
 """
 import argparse
 import logging
+import re
 import sys
 import time
 from collections import Counter
@@ -51,6 +52,62 @@ class Candidate:
     chunk_count: int
     chunk_hash: str | None   # 지금 조각에 남긴 content_hash (없으면 None)
     chunk_kind: str | None   # 지금 조각의 doc_kind
+    chunk_text_version: str | None = None   # [94] 지금 조각의 임베딩 글 형식 (과목 행 문장화)
+
+
+# [94] 과목 행(교육과정 PDF 표 한 줄)은 본문이 "심화 | 4 | 1 | 61510B | 인공지능 | 3 | 3 | | |"처럼 40~60자라
+# 질문 문장과 의미가 맞지 않아 검색에 거의 안 걸린다 (rag_questions 교육과정 Hit@10 0.75, 과목 3건은 41위·75위·200위 밖).
+# raw_metadata의 칸(학년·학기·이수구분·학점·시간)으로 문장을 만들어 조각 본문·임베딩에 쓴다. source_document 본문은 그대로.
+COURSE_TEXT_VERSION = "course-sentence-2"   # 문장 형식을 바꾸면 올린다 → 다음 index 실행 때 과목 행만 다시 임베딩
+OFFERED_BY_RE = re.compile(r"(학과|학부|전공)$")                 # completion_type에 개설 학과가 들어간 경우 (타과 과목)
+TITLE_RE = re.compile(r"^\s*(\d{4})\s+(.+?)\s+-\s+")            # "2026 안경광학과 - MKH(독일식검안)특론"
+FILE_RE = re.compile(r"_(\d{4})_(.+?)_curriculum", re.I)         # "konyang_2026_안경광학과_curriculum.pdf"
+
+
+def _num(v) -> str | None:
+    """"2.0" / 2.0 → "2", "1.5" → "1.5", 비었으면 None."""
+    try:
+        f = float(v)
+    except (TypeError, ValueError):
+        return None
+    return str(int(f)) if f == int(f) else str(f)
+
+
+def course_year_dept(c: Candidate) -> tuple[str | None, str | None]:
+    """과목 행의 (교육과정 연도, 학과). 제목에서, 없으면 원본 파일 이름에서."""
+    m = TITLE_RE.match(c.title or "") or FILE_RE.search(str(c.raw_metadata.get("source_file_name") or ""))
+    return (m.group(1), m.group(2).strip()) if m else (None, None)
+
+
+def course_text(c: Candidate) -> str | None:
+    """과목 행이면 검색용 문장, 아니면 None.
+
+    예) 건양대학교 의료IT공학과 2026학년도 교육과정 과목: 인공지능 (과목코드 61510B).
+        4학년 1학기에 듣는 심화 과목, 3학점, 이론 3시간.
+        원문: 심화 | 4 | 1 | 61510B | 인공지능 | 3 | 3 | | |
+    """
+    m = c.raw_metadata
+    name = (m.get("course_name") or "").strip()
+    if not name or (m.get("year_level") is None and m.get("credits") is None):
+        return None
+    year, dept = course_year_dept(c)
+    head = " ".join(x for x in (SCHOOL, dept, f"{year}학년도" if year else None) if x)
+    code = f" (과목코드 {m['course_code']})" if m.get("course_code") else ""
+    when = " ".join(x for x in (f"{_num(m.get('year_level'))}학년" if _num(m.get("year_level")) else None,
+                                f"{_num(m.get('semester'))}학기" if _num(m.get("semester")) else None) if x)
+    kind = (m.get("completion_type") or "").strip()
+    # [94] 다른 학과가 개설한 과목은 completion_type 칸에 이수구분 대신 개설 학과 이름이 들어 있다 ("인공지능학과")
+    offered = kind if OFFERED_BY_RE.search(kind) else ""
+    if offered:
+        kind = ""
+    what = f"{offered}에서 개설하는 과목" if offered else " ".join(x for x in (kind, "과목") if x)
+    parts = [f"{when}에 듣는 {what}" if when else (what if kind or offered else ""),
+             f"{_num(m.get('credits'))}학점" if _num(m.get("credits")) else "",
+             f"이론 {_num(m.get('theory_hours'))}시간" if _num(m.get("theory_hours")) else "",
+             f"실습 {_num(m.get('practice_hours'))}시간" if _num(m.get("practice_hours")) else ""]
+    detail = ", ".join(p for p in parts if p)
+    lines = [f"{head} 교육과정 과목: {name}{code}.", f"{detail}." if detail else "", f"원문: {c.content.strip()}"]
+    return "\n".join(x for x in lines if x)
 
 
 def is_school(c: Candidate) -> bool:
@@ -93,6 +150,13 @@ def chunk_meta(c: Candidate, doc_kind: str) -> dict:
         meta["department"] = dept
     if c.raw_metadata.get("curriculum_year"):
         meta["curriculum_year"] = c.raw_metadata["curriculum_year"]
+    if course_text(c) is not None:   # [94] 과목 행: 학과·연도는 raw_metadata에 없어 제목·파일 이름에서
+        year, dept = course_year_dept(c)
+        if dept and "department" not in meta:
+            meta["department"] = dept
+        if year and "curriculum_year" not in meta:
+            meta["curriculum_year"] = year
+        meta["text_version"] = COURSE_TEXT_VERSION
     return meta
 
 
@@ -109,7 +173,8 @@ def load_candidates(source_name: str | None = None) -> list[Candidate]:
         rows = conn.execute(text(f"""
             SELECT d.source_document_id, d.source_name, d.source_type, d.document_type, r.resource_type,
                    coalesce(d.title, ''), d.content, d.content_hash, coalesce(d.raw_metadata, '{{}}'::jsonb),
-                   count(c.chunk_id), max(c.metadata->>'content_hash'), max(c.metadata->>'doc_kind')
+                   count(c.chunk_id), max(c.metadata->>'content_hash'), max(c.metadata->>'doc_kind'),
+                   max(c.metadata->>'text_version')
             FROM source_document d
             LEFT JOIN resource r ON r.resource_id = d.resource_id
             LEFT JOIN document_chunk c ON c.source_document_id = d.source_document_id
@@ -129,6 +194,8 @@ def needs_index(c: Candidate, kind: str) -> str | None:
         return "본문 바뀜"
     if c.chunk_kind != kind:
         return f"종류 바뀜({c.chunk_kind} → {kind})"
+    if course_text(c) is not None and c.chunk_text_version != COURSE_TEXT_VERSION:
+        return "과목 행 문장화"   # [94]
     return None
 
 
@@ -137,7 +204,8 @@ def index_one(c: Candidate, doc_kind: str) -> int:
     from engine.rag.store import _engine, write_chunks
 
     title = c.title or f"문서 {c.source_document_id}"
-    doc = ExtractedDoc(filename=title, file_type="db", text=c.content, method="text")
+    # [94] 과목 행은 문장으로 바꾼 글을 조각 본문·임베딩에 쓴다 (LLM이 읽는 본문은 source_document 그대로)
+    doc = ExtractedDoc(filename=title, file_type="db", text=course_text(c) or c.content, method="text")
     chunks = chunk_document(doc)
     with _engine().begin() as conn:
         write_chunks(conn, c.source_document_id, title, chunks, chunk_meta(c, doc_kind))

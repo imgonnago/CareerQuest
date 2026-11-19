@@ -10,7 +10,8 @@
   "source_name": "KONYANG_CURRICULUM_PDF",
   "title": "2026학년도 인공지능학과 교육과정",
   "source_url": "https://ai.konyang.ac.kr/uloads_clone/curriculum/STB_202610201036110470.pdf",
-  "evidence": "00052M | 파이썬 프로그래밍 | 2.0"
+  "evidence": "00052M | 파이썬 프로그래밍 | 2.0",
+  "split": "dev"
  },
  {
   "id": "rag-02",
@@ -23,7 +24,8 @@
   "source_name": "KONYANG_CURRICULUM_PDF",
   "title": "2026 임상병리학과 - 병원미생물학",
   "source_url": "https://www.konyang.ac.kr/uloads_clone/curriculum/REN_202610230440584871.pdf",
-  "evidence": "기본 | 2 | 1 | 50850A | 병원미생물학 | 3"
+  "evidence": "기본 | 2 | 1 | 50850A | 병원미생물학 | 3",
+  "split": "test"
  },
  {
   "id": "rag-03",
@@ -36,7 +38,8 @@
   "source_name": "KONYANG_CURRICULUM_PDF",
   "title": "2026 병원경영학과 - 병원경영학개론",
   "source_url": "https://sec.konyang.ac.kr/cmm/fms/FileDown.do?atchFileId=FILE_000000000228976&fileSn=0",
-  "evidence": "심화 | 1 | 1 | 30876A | 병원경영학개론 | 3"
+  "evidence": "심화 | 1 | 1 | 30876A | 병원경영학개론 | 3",
+  "split": "dev"
  },
  {
   "id": "rag-04",
@@ -49,7 +52,8 @@
   "source_name": "KONYANG_CURRICULUM_PDF",
   "title": "2026 작업치료학과 - 고급해부생리학",
   "source_url": "https://www.konyang.ac.kr/uloads_clone/curriculum/REN_202610230240081401.pdf",
-  "evidence": "심화 | 4 | 2 | 80762B | 고급해부생리학 | 2"
+  "evidence": "심화 | 4 | 2 | 80762B | 고급해부생리학 | 2",
+  "split": "dev"
  },
  {
   "id": "rag-05",
@@ -62,7 +66,8 @@
   "source_name": "KONYANG_CURRICULUM_PDF",
   "title": "2026 안경광학과 - MKH(독일식검안)특론",
   "source_url": "https://www.konyang.ac.kr/uloads_clone/curriculum/REN_202610120727147001.pdf",
-  "evidence": "심화 | 3 | 2 | 50736B | MKH(독일식검안)특론 | 2"
+  "evidence": "심화 | 3 | 2 | 50736B | MKH(독일식검안)특론 | 2",
+  "split": "dev"
  },
  {
   "id": "rag-06",
@@ -75,7 +80,8 @@
   "source_name": "KONYANG_CURRICULUM_PDF",
   "title": "2026 간호학과 - 간호와 AI 기술",
   "source_url": "https://sec.konyang.ac.kr/cmm/fms/FileDown.do?atchFileId=FILE_000000000229236&fileSn=0",
-  "evidence": "선택 | 2 | 2 | 80216C | 간호와 AI 기술"
+  "evidence": "선택 | 2 | 2 | 80216C | 간호와 AI 기술",
+  "split": "test"
  },
  {
   "id": "rag-07",
@@ -88,7 +94,8 @@
   "source_name": "KONYANG_CURRICULUM_PDF",
   "title": "2026 간호학과 - 의료데이터 기초와 환자 안전",
   "source_url": "https://sec.konyang.ac.kr/cmm/fms/FileDown.do?atchFileId=FILE_000000000229236&fileSn=0",
-  "evidence": "선택 | 4 | 1 | 80217C | 의료데이터 기초와 환자 안전"
+  "evidence": "선택 | 4 | 1 | 80217C | 의료데이터 기초와 환자 안전",
+  "split": "test"
  },
  {
   "id": "rag-08",
@@ -101,7 +108,8 @@
   "source_name": "KONYANG_CURRICULUM_PDF",
   "title": "2026 물리치료학과 - 물리치료사 임상실습 Ⅰ",
   "source_url": "https://www.konyang.ac.kr/uloads_clone/curriculum/REN_202610230700121181.pdf",
-  "evidence": "물리치료사 임상실습 Ⅰ | 2 | | 4 | | 임상실습(160H)"
+  "evidence": "물리치료사 임상실습 Ⅰ | 2 | | 4 | | 임상실습(160H)",
+  "split": "dev"
  },
  {
   "id": "rag-09",
@@ -114,7 +122,8 @@
   "source_name": "KONYANG_CURRICULUM_PDF",
   "title": "2026 치위생학과 - 치위생학개론",
   "source_url": "https://www.konyang.ac.kr/uloads_clone/curriculum/REN_202610201031292371.pdf",
-  "evidence": "기본 | 1 | 1 | 80983A | 치위생학개론 | 2"
+  "evidence": "기본 | 1 | 1 | 80983A | 치위생학개론 | 2",
+  "split": "dev"
  },
  {
   "id": "rag-10",
@@ -127,7 +136,8 @@
   "source_name": "KONYANG_CURRICULUM_PDF",
   "title": "2026 의료IT공학과 - 인공지능",
   "source_url": "https://sec.konyang.ac.kr/cmm/fms/FileDown.do?atchFileId=FILE_000000000229266&fileSn=0",
-  "evidence": "심화 | 4 | 1 | 61510B | 인공지능 | 3"
+  "evidence": "심화 | 4 | 1 | 61510B | 인공지능 | 3",
+  "split": "dev"
  },
  {
   "id": "rag-11",
@@ -140,7 +150,8 @@
   "source_name": "KONYANG_CURRICULUM_PDF",
   "title": "2026 의공학과 - 의료인공지능과딥러닝실무",
   "source_url": "https://sec.konyang.ac.kr/cmm/fms/FileDown.do?atchFileId=FILE_000000000229238&fileSn=0",
-  "evidence": "심화 | 3 | 1 | 61624C | 의료인공지능과딥러닝실무 | 3 | 2 | 2"
+  "evidence": "심화 | 3 | 1 | 61624C | 의료인공지능과딥러닝실무 | 3 | 2 | 2",
+  "split": "dev"
  },
  {
   "id": "rag-12",
@@ -153,7 +164,8 @@
   "source_name": "KONYANG_CURRICULUM_PDF",
   "title": "2026 제약생명공학과 - 화장품과학",
   "source_url": "https://sec.konyang.ac.kr/cmm/fms/FileDown.do?atchFileId=FILE_000000000229241&fileSn=0",
-  "evidence": "심화 | 3 | 1 | 61722C | 화장품과학 | 3"
+  "evidence": "심화 | 3 | 1 | 61722C | 화장품과학 | 3",
+  "split": "test"
  },
  {
   "id": "rag-13",
@@ -166,7 +178,8 @@
   "source_name": "KONYANG_OFFICIAL_EXTRACURRICULAR",
   "title": "(신청마감) 2021학년도 동계 토익몰입교육(토익팍팍) 수강생 모집",
   "source_url": "https://www.konyang.ac.kr/cop/bbs/BBSMSTR_000000000587/selectBoardArticle.do?nttId=185127&kind=&mno=sitemap_02&pageIndex=28&searchCnd=&searchWrd=",
-  "evidence": "교육비의 80% 는 학교에서 부담하고 있습니다"
+  "evidence": "교육비의 80% 는 학교에서 부담하고 있습니다",
+  "split": "dev"
  },
  {
   "id": "rag-14",
@@ -179,7 +192,8 @@
   "source_name": "KONYANG_OFFICIAL_EXTRACURRICULAR",
   "title": "​2018학년도 방학 중 다문화멘토링 활동자 신청안내​﻿​​﻿​﻿​",
   "source_url": "https://www.konyang.ac.kr/cop/bbs/BBSMSTR_000000000587/selectBoardArticle.do?nttId=127202&kind=&mno=sitemap_02&pageIndex=63&searchCnd=&searchWrd=",
-  "evidence": "직전학기 평점평균이 2.75 이상인 대한민국 국적 재학생"
+  "evidence": "직전학기 평점평균이 2.75 이상인 대한민국 국적 재학생",
+  "split": "dev"
  },
  {
   "id": "rag-15",
@@ -192,7 +206,8 @@
   "source_name": "KONYANG_OFFICIAL_EXTRACURRICULAR",
   "title": "2018년 커리어역량강화 프로그램 신청 안내",
   "source_url": "https://www.konyang.ac.kr/cop/bbs/BBSMSTR_000000000587/selectBoardArticle.do?nttId=151540&kind=&mno=sitemap_02&pageIndex=54&searchCnd=&searchWrd=",
-  "evidence": "1개 과정당 3만원, 90%이상 출석시 전액 환급"
+  "evidence": "1개 과정당 3만원, 90%이상 출석시 전액 환급",
+  "split": "test"
  },
  {
   "id": "rag-16",
@@ -205,7 +220,8 @@
   "source_name": "KONYANG_OFFICIAL_EXTRACURRICULAR",
   "title": "2016 커리어역량강화프로그램 2차 참가자 모집 안내",
   "source_url": "https://www.konyang.ac.kr/cop/bbs/BBSMSTR_000000000587/selectBoardArticle.do?nttId=113842&kind=&mno=sitemap_02&pageIndex=91&searchCnd=&searchWrd=",
-  "evidence": "수강료 무료(자격증발급비는 학생 개인 부담)"
+  "evidence": "수강료 무료(자격증발급비는 학생 개인 부담)",
+  "split": "test"
  },
  {
   "id": "rag-17",
@@ -218,7 +234,8 @@
   "source_name": "KONYANG_EXTRACURRICULAR_CATALOG",
   "title": "[해외교류프로그램] Discover World",
   "source_url": "https://www.konyang.ac.kr/kor/sub06_03_06_02.do",
-  "evidence": "해외대학 단기연수, 해외 인턴십, Global IC-PBL 등의 프로그램이 운영중"
+  "evidence": "해외대학 단기연수, 해외 인턴십, Global IC-PBL 등의 프로그램이 운영중",
+  "split": "dev"
  },
  {
   "id": "rag-18",
@@ -231,7 +248,8 @@
   "source_name": "KONYANG_EXTRACURRICULAR_CATALOG",
   "title": "GROWMATE튜터링",
   "source_url": "https://www.konyang.ac.kr/kor/sub06_03_06_02.do",
-  "evidence": "참여대상: 3~4학년"
+  "evidence": "참여대상: 3~4학년",
+  "split": "dev"
  },
  {
   "id": "rag-19",
@@ -244,7 +262,8 @@
   "source_name": "KONYANG_EXTRACURRICULAR_CATALOG",
   "title": "핵심역량진단평가",
   "source_url": "https://www.konyang.ac.kr/kor/sub06_03_06_02.do",
-  "evidence": "운영부서: 교육성과관리센터"
+  "evidence": "운영부서: 교육성과관리센터",
+  "split": "dev"
  },
  {
   "id": "rag-20",
@@ -257,7 +276,8 @@
   "source_name": "KONYANG_EXTRACURRICULAR_CATALOG",
   "title": "학습전략검사",
   "source_url": "https://www.konyang.ac.kr/kor/sub06_03_06_02.do",
-  "evidence": "참여대상: 신입생"
+  "evidence": "참여대상: 신입생",
+  "split": "dev"
  },
  {
   "id": "rag-21",
@@ -270,7 +290,8 @@
   "source_name": "KONYANG_EXTRACURRICULAR_CATALOG",
   "title": "[메디컬RISE] 지역-대학 동반 리빙랩 프로그램",
   "source_url": "https://www.konyang.ac.kr/kor/sub06_03_06_02.do",
-  "evidence": "지역 시민과 힘을 모아 지역의 문제를 찾고, 해결 방안을 제시하는 프로그램"
+  "evidence": "지역 시민과 힘을 모아 지역의 문제를 찾고, 해결 방안을 제시하는 프로그램",
+  "split": "dev"
  },
  {
   "id": "rag-22",
@@ -283,7 +304,8 @@
   "source_name": "KONYANG_MEDICAL_COLLEGE_NOTICES",
   "title": "제8기 학생연구인턴십 연구인턴 지원 안내",
   "source_url": "https://mie.konyang.ac.kr/cop/bbs/BBSMSTR_000000000563/selectBoardArticle.do?nttId=200395&kind=&mno=sitemap_02&pageIndex=23&searchCnd=&searchWrd=",
-  "evidence": "전체 연구기간 중 3/4 이상"
+  "evidence": "전체 연구기간 중 3/4 이상",
+  "split": "dev"
  },
  {
   "id": "rag-23",
@@ -296,7 +318,8 @@
   "source_name": "KONYANG_MEDICAL_COLLEGE_NOTICES",
   "title": "[메디컬RISE] DSC공유대학 비교과 프로그램 하계방학 운영 안내",
   "source_url": "https://mie.konyang.ac.kr/cop/bbs/BBSMSTR_000000000563/selectBoardArticle.do?nttId=289104&kind=&mno=sitemap_02&pageIndex=3&searchCnd=&searchWrd=",
-  "evidence": "커넥티드 캠퍼스 : 미래 의료 기술-케어 융합 리더 과정"
+  "evidence": "커넥티드 캠퍼스 : 미래 의료 기술-케어 융합 리더 과정",
+  "split": "dev"
  },
  {
   "id": "rag-24",
@@ -309,7 +332,8 @@
   "source_name": "KONYANG_MEDICAL_COLLEGE_NOTICES",
   "title": "2026년 「미래 공공의료인력 양성을 위한 대학생 커리어패스 코칭 캠프(의과대학)」 참여학생 모집",
   "source_url": "https://mie.konyang.ac.kr/cop/bbs/BBSMSTR_000000000563/selectBoardArticle.do?nttId=288876&kind=&mno=sitemap_02&pageIndex=4&searchCnd=&searchWrd=",
-  "evidence": "참가비: 무료 (식사 및 숙박 제공)"
+  "evidence": "참가비: 무료 (식사 및 숙박 제공)",
+  "split": "dev"
  },
  {
   "id": "rag-25",
@@ -322,7 +346,8 @@
   "source_name": "KONYANG_CAREER_EVENTS",
   "title": "DSC 지역혁신플랫폼 산업체(바이오헬스) 탐방 프로그램 참여자 모집 안내 (~12/8)",
   "source_url": "https://job.konyang.ac.kr/cop/bbs/BBSMSTR_000000001401/selectBoardArticle.do?nttId=244935&kind=&mno=sitemap_02&pageIndex=103&searchCnd=&searchWrd=",
-  "evidence": "CHC 랩, 큐로셀"
+  "evidence": "CHC 랩, 큐로셀",
+  "split": "test"
  },
  {
   "id": "rag-26",
@@ -335,7 +360,8 @@
   "source_name": "KONYANG_CAREER_EVENTS",
   "title": "[데이콘] 국부펀드 KIC, AI 에이전트 공모전(~11/12)",
   "source_url": "https://job.konyang.ac.kr/cop/bbs/BBSMSTR_000000001401/selectBoardArticle.do?nttId=294792&kind=&mno=sitemap_02&pageIndex=8&searchCnd=&searchWrd=",
-  "evidence": "총 상금: 1,500만 원"
+  "evidence": "총 상금: 1,500만 원",
+  "split": "dev"
  },
  {
   "id": "rag-27",
@@ -348,7 +374,8 @@
   "source_name": "KONYANG_CAREER_EVENTS",
   "title": "[KISIA] 2026 정보보호 정책제안 공모전(~10/11)",
   "source_url": "https://job.konyang.ac.kr/cop/bbs/BBSMSTR_000000001401/selectBoardArticle.do?nttId=291170&kind=&mno=sitemap_02&pageIndex=26&searchCnd=&searchWrd=",
-  "evidence": "최소 2 인 ~ 최대 7 인"
+  "evidence": "최소 2 인 ~ 최대 7 인",
+  "split": "test"
  },
  {
   "id": "rag-28",
@@ -361,7 +388,8 @@
   "source_name": "KONYANG_CAREER_EVENTS",
   "title": "「2026 전시산업 대학생 경진대회」 참가자 모집 안내",
   "source_url": "https://job.konyang.ac.kr/cop/bbs/BBSMSTR_000000001401/selectBoardArticle.do?nttId=290475&kind=&mno=sitemap_02&pageIndex=31&searchCnd=&searchWrd=",
-  "evidence": "3~4 인 팀"
+  "evidence": "3~4 인 팀",
+  "split": "dev"
  },
  {
   "id": "rag-29",
@@ -374,7 +402,8 @@
   "source_name": "KONYANG_CAREER_EVENTS",
   "title": "[배재대학교] 바이오인력 인재 양성 비임상 특화 교육 참여자 모집(~9/23)",
   "source_url": "https://job.konyang.ac.kr/cop/bbs/BBSMSTR_000000001401/selectBoardArticle.do?nttId=293397&kind=&mno=sitemap_02&pageIndex=13&searchCnd=&searchWrd=",
-  "evidence": "2026. 10. 6.(화) ~ 10. 8.(목) 9:00 ~ 17:00(3일, 총 21시간)"
+  "evidence": "2026. 10. 6.(화) ~ 10. 8.(목) 9:00 ~ 17:00(3일, 총 21시간)",
+  "split": "test"
  },
  {
   "id": "rag-30",
@@ -387,7 +416,8 @@
   "source_name": "KONYANG_HOSPITAL_RECRUIT",
   "title": "건양대학교병원 2026년도 신규 간호사 모집",
   "source_url": "https://www.kyuh.ac.kr/prog/recruitNotice/view.do?pageIndex=8&searchOtptSttus=2N&noticeId=RT2026H000000123604Yf3kE0e",
-  "evidence": "토익만 인정하고 있습니다"
+  "evidence": "토익만 인정하고 있습니다",
+  "split": "test"
  },
  {
   "id": "rag-31",
@@ -400,7 +430,8 @@
   "source_name": "KONYANG_HOSPITAL_RECRUIT",
   "title": "시설팀 시설직(기계) 모집",
   "source_url": "https://www.kyuh.ac.kr/prog/recruitNotice/view.do?pageIndex=1&searchOtptSttus=2Y&noticeId=RT2026H000000146769Jp4fW4h",
-  "evidence": "접수마감: 2026-11-30T12:00:00+09:00"
+  "evidence": "접수마감: 2026-11-30T12:00:00+09:00",
+  "split": "dev"
  },
  {
   "id": "rag-32",
@@ -413,7 +444,8 @@
   "source_name": "KONYANG_JOB_BOARD",
   "title": "(~11/19) [LINE] 2021 LINE ADS AI/ML Engineer 인턴 모집 (정규직 채용 연계형)",
   "source_url": "https://job.konyang.ac.kr/cop/bbs/BBSMSTR_000000001381/selectBoardArticle.do?nttId=185160&kind=&mno=sitemap_02&pageIndex=598&searchCnd=&searchWrd=",
-  "evidence": "온라인 코딩 테스트"
+  "evidence": "온라인 코딩 테스트",
+  "split": "dev"
  },
  {
   "id": "rag-33",
@@ -426,7 +458,8 @@
   "source_name": "KONYANG_JOB_BOARD",
   "title": "[하나증권] 2026년 하반기 인턴십(채용연계형) 인재 모집(~ 9/8)",
   "source_url": "https://job.konyang.ac.kr/cop/bbs/BBSMSTR_000000001381/selectBoardArticle.do?nttId=293111&kind=&mno=sitemap_02&pageIndex=49&searchCnd=&searchWrd=",
-  "evidence": "지원서 제출 후 역량검사 수행 필수"
+  "evidence": "지원서 제출 후 역량검사 수행 필수",
+  "split": "test"
  },
  {
   "id": "rag-34",
@@ -439,7 +472,8 @@
   "source_name": "KONYANG_JOB_BOARD",
   "title": "(~9/16) 삼화제분(주) 신입직원 채용",
   "source_url": "https://job.konyang.ac.kr/cop/bbs/BBSMSTR_000000001381/selectBoardArticle.do?nttId=183501&kind=&mno=sitemap_02&pageIndex=615&searchCnd=&searchWrd=",
-  "evidence": "33,000,000 원 ~ 34,000,000"
+  "evidence": "33,000,000 원 ~ 34,000,000",
+  "split": "dev"
  },
  {
   "id": "rag-35",
@@ -452,7 +486,8 @@
   "source_name": "KONYANG_JOB_BOARD",
   "title": "[국립국제교육원]2024년 제6차공무직근로자(행정원_영어능통자) 채용(~10/30)",
   "source_url": "https://job.konyang.ac.kr/cop/bbs/BBSMSTR_000000001381/selectBoardArticle.do?nttId=266812&kind=&mno=sitemap_02&pageIndex=285&searchCnd=&searchWrd=",
-  "evidence": "이메일 접수(niiedhr@korea.kr)"
+  "evidence": "이메일 접수(niiedhr@korea.kr)",
+  "split": "dev"
  },
  {
   "id": "rag-36",
@@ -465,7 +500,8 @@
   "source_name": "JOB_WEB_DETAIL",
   "title": "[쿠팡] [쿠팡이츠] 머신러닝 엔지니어 (Search and Discovery) 채용 공고",
   "source_url": "https://www.wanted.co.kr/wd/370976",
-  "evidence": "경험을 7년 이상 보유하신 분"
+  "evidence": "경험을 7년 이상 보유하신 분",
+  "split": "dev"
  },
  {
   "id": "rag-37",
@@ -478,7 +514,8 @@
   "source_name": "JOB_WEB_DETAIL",
   "title": "[프리베노틱스] 머신러닝 엔지니어 (Computer Vision) 채용 공고",
   "source_url": "https://www.wanted.co.kr/wd/366316",
-  "evidence": "Computer Vision / Deep Learning 분야 3년 이상 실무 경력"
+  "evidence": "Computer Vision / Deep Learning 분야 3년 이상 실무 경력",
+  "split": "test"
  },
  {
   "id": "rag-38",
@@ -491,7 +528,8 @@
   "source_name": "JOB_WEB_DETAIL",
   "title": "[(주)제이씨에프테크놀러지] 머신러닝 엔지니어 채용",
   "source_url": "https://www.saramin.co.kr/zf_user/jobs/view?rec_idx=49240447",
-  "evidence": "자격증정보처리기사2급"
+  "evidence": "자격증정보처리기사2급",
+  "split": "dev"
  },
  {
   "id": "rag-39",
@@ -504,7 +542,8 @@
   "source_name": "KUKSIWON_EXAM_DETAIL",
   "title": "임상병리사 - EXAM_ELIGIBILITY",
   "source_url": "https://www.kuksiwon.or.kr/subcnt/c_2012/2/view.do?seq=7&itm_seq=08",
-  "evidence": "이듬해 2월 이전 졸업이 확인된 자"
+  "evidence": "이듬해 2월 이전 졸업이 확인된 자",
+  "split": "dev"
  },
  {
   "id": "rag-40",
@@ -517,7 +556,8 @@
   "source_name": "KUKSIWON_EXAM_DETAIL",
   "title": "임상병리사 - EXAM_SUBJECTS",
   "source_url": "https://www.kuksiwon.or.kr/subcnt/c_2012/7/view.do?seq=7&itm_seq=08",
-  "evidence": "필기 | 3 | 215"
+  "evidence": "필기 | 3 | 215",
+  "split": "dev"
  },
  {
   "id": "rag-41",
@@ -530,7 +570,8 @@
   "source_name": "KUKSIWON_EXAM_DETAIL",
   "title": "보건교육사 - EXAM_SUBJECTS",
   "source_url": "https://www.kuksiwon.or.kr/subcnt/c_2026/7/view.do?seq=7&itm_seq=31",
-  "evidence": "보건교육사 2급 | 8 | 180"
+  "evidence": "보건교육사 2급 | 8 | 180",
+  "split": "test"
  },
  {
   "id": "rag-42",
@@ -543,7 +584,8 @@
   "source_name": "KUKSIWON_EXAM_DETAIL",
   "title": "요양보호사 - EXAM_ELIGIBILITY",
   "source_url": "https://www.kuksiwon.or.kr/subcnt/c_2027/2/view.do?seq=7&itm_seq=35",
-  "evidence": "표준교육과정 320시간"
+  "evidence": "표준교육과정 320시간",
+  "split": "dev"
  },
  {
   "id": "rag-43",
@@ -556,7 +598,8 @@
   "source_name": "KUKSIWON_EXAM_DETAIL",
   "title": "보조공학사 - EXAM_ELIGIBILITY",
   "source_url": "https://www.kuksiwon.or.kr/subcnt/c_2031/2/view.do?seq=7&itm_seq=16",
-  "evidence": "총 10개 이상 이수"
+  "evidence": "총 10개 이상 이수",
+  "split": "test"
  },
  {
   "id": "rag-44",
@@ -569,7 +612,8 @@
   "source_name": "DATAQ_CERTIFICATE",
   "title": "빅데이터분석기사 공식 자격정보",
   "source_url": "https://www.dataq.or.kr/www/dataq_brochure_2022.pdf",
-  "evidence": "SQL 개발자 (SQLD) 6"
+  "evidence": "SQL 개발자 (SQLD) 6",
+  "split": "dev"
  },
  {
   "id": "rag-45",
@@ -582,7 +626,8 @@
   "source_name": "QNET_ITEM_API",
   "title": "정보처리기사 - 취득방법",
   "source_url": "http://openapi.q-net.or.kr/api/service/rest/InquiryInformationTradeNTQSVC/getList",
-  "evidence": "과목당 40점 이상, 전과목 평균 60점 이상"
+  "evidence": "과목당 40점 이상, 전과목 평균 60점 이상",
+  "split": "dev"
  },
  {
   "id": "rag-46",
@@ -595,7 +640,8 @@
   "source_name": "KUKSIWON_OCCUPATION_INFO",
   "title": "치과기공사 - 국시원 직종별 시험정보",
   "source_url": "https://www.kuksiwon.or.kr/subcnt/c_2016/1/view.do?seq=7&itm_seq=10",
-  "evidence": "전산설계(CAD/CAM), 삼차원(3D)프린터"
+  "evidence": "전산설계(CAD/CAM), 삼차원(3D)프린터",
+  "split": "dev"
  },
  {
   "id": "rag-47",
@@ -608,7 +654,8 @@
   "source_name": "DAEJEON_YOUTH_PORTAL",
   "title": "AI 모의면접 시스템",
   "source_url": "https://www.daejeonyouthportal.kr/content/CT_000000000451/cntPage.do?commonMenuNo=438_323_324_325&dpmSectionFst=100&dpmSectionScd=",
-  "evidence": "대전일자리지원센터 1층 AI면접실"
+  "evidence": "대전일자리지원센터 1층 AI면접실",
+  "split": "dev"
  },
  {
   "id": "rag-48",
@@ -621,7 +668,8 @@
   "source_name": "DAEJEON_YOUTH_PORTAL",
   "title": "[모집] 한국오라클 직접 교육, 기업이 원하고 이력서에 남는 진짜 AI 역량 개발",
   "source_url": "https://www.daejeonyouthportal.kr/board/BBSMSTR_000000000251/articleView.do?commonMenuNo=180_35&searchSeq=15611",
-  "evidence": "월 최대 50만원의 지원금이 제공됩니다"
+  "evidence": "월 최대 50만원의 지원금이 제공됩니다",
+  "split": "test"
  },
  {
   "id": "rag-49",
@@ -634,7 +682,8 @@
   "source_name": "DAEJEON_YOUTH_PORTAL",
   "title": "40일 간의 데이터 탐험, ABC 부트캠프 3기 모집",
   "source_url": "https://www.daejeonyouthportal.kr/board/BBSMSTR_000000000251/articleView.do?commonMenuNo=180_35&searchSeq=7446",
-  "evidence": "총 150만원 참여자 수당 지급"
+  "evidence": "총 150만원 참여자 수당 지급",
+  "split": "dev"
  },
  {
   "id": "rag-50",
@@ -647,6 +696,7 @@
   "source_name": "DAEJEON_YOUTH_PORTAL",
   "title": "[국비무료교육] 클라우드보안 전문가 양성 과정 (대전폴리텍대학 클라우드보안과)",
   "source_url": "https://www.daejeonyouthportal.kr/board/BBSMSTR_000000000251/articleView.do?commonMenuNo=180_35&searchSeq=9996",
-  "evidence": "만39세이하 미취업자"
+  "evidence": "만39세이하 미취업자",
+  "split": "dev"
  }
 ]
