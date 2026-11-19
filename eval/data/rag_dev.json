@@ -1,0 +1,644 @@
+[
+ {
+  "id": "rag-dev-01",
+  "category": "교육과정",
+  "question": "건양대 제약생명공학과 '일반화학 실험'은 몇 학년 몇 학기에 듣고 몇 학점이에요?",
+  "correct": "1학년 2학기 기본 과목, 1학점(실습 2시간)이다 (61703C).",
+  "incorrect": "다른 학년·학기·학점을 말하거나 과목이 없다고 함",
+  "time_sensitive": false,
+  "source_document_id": 1737,
+  "answer_document_ids": [
+   1737
+  ],
+  "source_name": "KONYANG_CURRICULUM_PDF",
+  "title": "2026 제약생명공학과 - 일반화학 실험",
+  "source_url": "https://sec.konyang.ac.kr/cmm/fms/FileDown.do?atchFileId=FILE_000000000229241&fileSn=0",
+  "evidence": "기본 | 1 | 2 | 61703C | 일반화학 실험 | 1"
+ },
+ {
+  "id": "rag-dev-02",
+  "category": "교육과정",
+  "question": "건양대 인공지능학과에서 고급딥러닝은 언제 들을 수 있어요?",
+  "correct": "2학년 2학기 심화 과목, 3학점 (61966A).",
+  "incorrect": "다른 학년·학기·학점을 말하거나 과목이 없다고 함",
+  "time_sensitive": false,
+  "source_document_id": 249,
+  "answer_document_ids": [
+   206,
+   249
+  ],
+  "source_name": "KONYANG_CURRICULUM_PDF",
+  "title": "2026 인공지능학과 - 고급딥러닝",
+  "source_url": "https://sec.konyang.ac.kr/cmm/fms/FileDown.do?atchFileId=FILE_000000000229244&fileSn=0",
+  "evidence": "심화 | 2 | 2 | 61966A | 고급딥러닝 | 3"
+ },
+ {
+  "id": "rag-dev-03",
+  "category": "교육과정",
+  "question": "건양대 방사선학과 인체해부학은 몇 학년 과목이고 몇 학점이에요?",
+  "correct": "1학년 1학기 기본 과목, 2학점 (50959B).",
+  "incorrect": "다른 학년·학기·학점을 말하거나 과목이 없다고 함",
+  "time_sensitive": false,
+  "source_document_id": 851,
+  "answer_document_ids": [
+   851
+  ],
+  "source_name": "KONYANG_CURRICULUM_PDF",
+  "title": "2026 방사선학과 - 인체해부학",
+  "source_url": "https://sec.konyang.ac.kr/cmm/fms/FileDown.do?atchFileId=FILE_000000000228980&fileSn=0",
+  "evidence": "기본 | 1 | 1 | 50959B | 인체해부학 | 2"
+ },
+ {
+  "id": "rag-dev-04",
+  "category": "교육과정",
+  "question": "건양대 의학과 '흉부및호흡기계' 과목은 몇 학년 몇 학기고 학점이 얼마예요?",
+  "correct": "3학년 1학기 기본 과목, 5학점 (80109E).",
+  "incorrect": "다른 학년·학기·학점을 말하거나 과목이 없다고 함",
+  "time_sensitive": false,
+  "source_document_id": 386,
+  "answer_document_ids": [
+   386
+  ],
+  "source_name": "KONYANG_CURRICULUM_PDF",
+  "title": "2026 의학과 - 흉부및호흡기계",
+  "source_url": "https://sec.konyang.ac.kr/cmm/fms/FileDown.do?atchFileId=FILE_000000000229810&fileSn=0",
+  "evidence": "기본 | 3 | 1 | 80109E | 흉부및호흡기계 | 5"
+ },
+ {
+  "id": "rag-dev-05",
+  "category": "교육과정",
+  "question": "건양대 병원경영학과에서 의료정보기술은 몇 학년에 듣는 과목이에요?",
+  "correct": "4학년 1학기 기본(필수) 과목, 3학점 (30849B).",
+  "incorrect": "다른 학년·학기·학점을 말하거나 과목이 없다고 함",
+  "time_sensitive": false,
+  "source_document_id": 660,
+  "answer_document_ids": [
+   660
+  ],
+  "source_name": "KONYANG_CURRICULUM_PDF",
+  "title": "2026 병원경영학과 - 의료정보기술",
+  "source_url": "https://sec.konyang.ac.kr/cmm/fms/FileDown.do?atchFileId=FILE_000000000228976&fileSn=0",
+  "evidence": "기본 | 4 | 1 | 30849B | 의료정보기술 | 3 | 3 | | | 필수"
+ },
+ {
+  "id": "rag-dev-06",
+  "category": "교육과정",
+  "question": "건양대 방사선학과 방사선장해방어학은 언제 들어요?",
+  "correct": "2학년 2학기 기본 과목, 2학점 (50968B).",
+  "incorrect": "다른 학년·학기·학점을 말하거나 과목이 없다고 함",
+  "time_sensitive": false,
+  "source_document_id": 868,
+  "answer_document_ids": [
+   868
+  ],
+  "source_name": "KONYANG_CURRICULUM_PDF",
+  "title": "2026 방사선학과 - 방사선장해방어학",
+  "source_url": "https://sec.konyang.ac.kr/cmm/fms/FileDown.do?atchFileId=FILE_000000000228980&fileSn=0",
+  "evidence": "기본 | 2 | 2 | 50968B | 방사선장해방어학 | 2"
+ },
+ {
+  "id": "rag-dev-07",
+  "category": "교육과정",
+  "question": "건양대 치위생학과 치과방사선학Ⅰ및 실습은 몇 학년 몇 학기에 하고 몇 학점이에요?",
+  "correct": "2학년 2학기 기본 과목, 3학점(이론 2·실습 2시간) (80983B).",
+  "incorrect": "다른 학년·학기·학점을 말하거나 과목이 없다고 함",
+  "time_sensitive": false,
+  "source_document_id": 966,
+  "answer_document_ids": [
+   966
+  ],
+  "source_name": "KONYANG_CURRICULUM_PDF",
+  "title": "2026 치위생학과 - 치과방사선학Ⅰ및 실습",
+  "source_url": "https://www.konyang.ac.kr/uloads_clone/curriculum/REN_202610201031292371.pdf",
+  "evidence": "기본 | 2 | 2 | 80983B | 치과방사선학Ⅰ및 실습 | 3 | 2 | 2"
+ },
+ {
+  "id": "rag-dev-08",
+  "category": "교육과정",
+  "question": "건양대 방사선학과 교육과정에 있는 임상감각생리학은 어느 학과 과목이고 몇 학점이에요?",
+  "correct": "안경광학과에서 개설하는 과목이고 2학점이다 (50758B).",
+  "incorrect": "개설 학과나 학점을 틀리거나 과목이 없다고 함",
+  "time_sensitive": false,
+  "source_document_id": 902,
+  "answer_document_ids": [
+   902
+  ],
+  "source_name": "KONYANG_CURRICULUM_PDF",
+  "title": "2026 방사선학과 - 임상감각생리학",
+  "source_url": "https://sec.konyang.ac.kr/cmm/fms/FileDown.do?atchFileId=FILE_000000000228980&fileSn=0",
+  "evidence": "안경광학과 | 50758B | 임상감각생리학 | 2"
+ },
+ {
+  "id": "rag-dev-09",
+  "category": "교육과정",
+  "question": "건양대 임상병리학과 조직검사학및실습은 몇 학년에 들어요?",
+  "correct": "2학년 1학기 기본 과목, 3학점(이론 2·실습 2시간) (50864A).",
+  "incorrect": "다른 학년·학기·학점을 말하거나 과목이 없다고 함",
+  "time_sensitive": false,
+  "source_document_id": 763,
+  "answer_document_ids": [
+   763
+  ],
+  "source_name": "KONYANG_CURRICULUM_PDF",
+  "title": "2026 임상병리학과 - 조직검사학및실습",
+  "source_url": "https://www.konyang.ac.kr/uloads_clone/curriculum/REN_202610230440584871.pdf",
+  "evidence": "기본 | 2 | 1 | 50864A | 조직검사학및실습 | 3"
+ },
+ {
+  "id": "rag-dev-10",
+  "category": "교육과정",
+  "question": "건양대 의학과 '감각기' 과목은 몇 학년 몇 학기 과목이에요?",
+  "correct": "4학년 1학기 기본 과목, 3학점 (80122E).",
+  "incorrect": "다른 학년·학기·학점을 말하거나 과목이 없다고 함",
+  "time_sensitive": false,
+  "source_document_id": 402,
+  "answer_document_ids": [
+   402
+  ],
+  "source_name": "KONYANG_CURRICULUM_PDF",
+  "title": "2026 의학과 - 감각기",
+  "source_url": "https://sec.konyang.ac.kr/cmm/fms/FileDown.do?atchFileId=FILE_000000000229810&fileSn=0",
+  "evidence": "기본 | 4 | 1 | 80122E | 감각기 | 3"
+ },
+ {
+  "id": "rag-dev-11",
+  "category": "비교과",
+  "question": "2026년 연구장비분야 전문인력양성과정은 교육 기간이 얼마나 되고 총 몇 시간이에요?",
+  "correct": "2026.3.3.~2026.11.27. 9개월, 총 1,480시간(전일제 09:00~18:00)이다.",
+  "incorrect": "기간이나 총 시간을 다르게 말함",
+  "time_sensitive": true,
+  "source_document_id": 9216,
+  "answer_document_ids": [
+   9216
+  ],
+  "source_name": "KONYANG_CAREER_EVENTS",
+  "title": "2026년 연구장비분야 전문인력양성과정 교육생 모집",
+  "source_url": "https://job.konyang.ac.kr/cop/bbs/BBSMSTR_000000001401/selectBoardArticle.do?nttId=282676&kind=&mno=sitemap_02&pageIndex=50&searchCnd=&searchWrd=",
+  "evidence": "2026.3.3.(화) ~ 2026.11.27.(금)/ 9개월(1,480시간)"
+ },
+ {
+  "id": "rag-dev-12",
+  "category": "비교과",
+  "question": "대전형 공유대학 BLS Provider(2차) 교육에 참가하면 내가 내야 하는 돈이 있어요?",
+  "correct": "자부담 58,000원(교재비 28,000원 + 이수증 발급비 30,000원)을 낸다. 메디컬캠퍼스 재학생 대상, 2026.2.9. 교육.",
+  "incorrect": "무료라고 하거나 금액을 틀림",
+  "time_sensitive": true,
+  "source_document_id": 10878,
+  "answer_document_ids": [
+   10878
+  ],
+  "source_name": "KONYANG_DEPARTMENT_PROGRAM_NOTICES",
+  "title": "대전형 공유대학 비교과 프로그램 BLS Provider(2차) 참가 학생 모집 안내",
+  "source_url": "https://gymnasium.konyang.ac.kr/cop/bbs/BBSMSTR_000000000062/selectBoardArticle.do?nttId=284578&kind=&mno=sitemap_02&pageIndex=3&searchCnd=&searchWrd=",
+  "evidence": "자부담 비용 : 58,000원 (교재비 28,000원 / 이수증 발급비 30,000원)"
+ },
+ {
+  "id": "rag-dev-13",
+  "category": "비교과",
+  "question": "건양대 모의면접(AI면접) 클리닉은 언제 운영하고 어느 부서에서 해요?",
+  "correct": "3월~12월 운영, 입학취업처(041-730-5153), 전학년 대상. 면접특강·모의면접·AI면접·면접 컨설팅.",
+  "incorrect": "운영 시기나 부서를 틀림",
+  "time_sensitive": false,
+  "source_document_id": 8851,
+  "answer_document_ids": [
+   8851
+  ],
+  "source_name": "KONYANG_EXTRACURRICULAR_CATALOG",
+  "title": "모의면접(AI면접) 클리닉",
+  "source_url": "https://www.konyang.ac.kr/kor/sub06_03_06_02.do",
+  "evidence": "운영시기 안내: 3월 ~12월"
+ },
+ {
+  "id": "rag-dev-14",
+  "category": "비교과",
+  "question": "건양대 취업준비형 모듈 프로그램은 몇 학년이 참여할 수 있어요?",
+  "correct": "3~4학년 대상, 4월~12월 운영, 특강·현장탐방 중심 (입학취업처).",
+  "incorrect": "다른 학년을 말함",
+  "time_sensitive": false,
+  "source_document_id": 8848,
+  "answer_document_ids": [
+   8848
+  ],
+  "source_name": "KONYANG_EXTRACURRICULAR_CATALOG",
+  "title": "취업준비형 모듈 프로그램",
+  "source_url": "https://www.konyang.ac.kr/kor/sub06_03_06_02.do",
+  "evidence": "참여대상: 3~4학년"
+ },
+ {
+  "id": "rag-dev-15",
+  "category": "비교과",
+  "question": "건양대 사회봉사센터 봉사활동 지원 프로그램(2022학년도 2학기)에 뽑히면 활동비를 얼마나 지원받아요?",
+  "correct": "봉사 그룹당 최대 50만원(봉사재료비·식비 등)을 지원한다.",
+  "incorrect": "금액을 틀리거나 개인당이라고 함",
+  "time_sensitive": true,
+  "source_document_id": 10334,
+  "answer_document_ids": [
+   10334
+  ],
+  "source_name": "KONYANG_MEDICAL_COLLEGE_NOTICES",
+  "title": "2022학년도 2학기 사회봉사센터 봉사활동 지원 프로그램 참가 신청 안내",
+  "source_url": "https://mie.konyang.ac.kr/cop/bbs/BBSMSTR_000000000563/selectBoardArticle.do?nttId=196690&kind=&mno=sitemap_02&pageIndex=25&searchCnd=&searchWrd=",
+  "evidence": "봉사 그룹당 최대 50만원까지 지원"
+ },
+ {
+  "id": "rag-dev-16",
+  "category": "비교과",
+  "question": "건양대 2018학년도 동계 현장실습 실습지원비는 얼마예요?",
+  "correct": "4주 40만원, 8주 60만원. 4학기 이상 이수한 재학생 대상.",
+  "incorrect": "금액을 틀림",
+  "time_sensitive": true,
+  "source_document_id": 10615,
+  "answer_document_ids": [
+   10615
+  ],
+  "source_name": "KONYANG_OFFICIAL_EXTRACURRICULAR",
+  "title": "2018학년도 동계 현장실습 추가 모집 안내",
+  "source_url": "https://www.konyang.ac.kr/cop/bbs/BBSMSTR_000000000587/selectBoardArticle.do?nttId=153593&kind=&mno=sitemap_02&pageIndex=51&searchCnd=&searchWrd=",
+  "evidence": "실습지원비 : 4주 40만원/ 8주 60만원"
+ },
+ {
+  "id": "rag-dev-17",
+  "category": "비교과",
+  "question": "2021 청년 해외취업지원과정(Global Young Challenger)은 누가 지원할 수 있고 비용이 들어요?",
+  "correct": "만 34세 이하 학사 학위 취득자(2021년 8월 졸업예정자 포함)가 대상이고 전액 무료다.",
+  "incorrect": "나이·학력 조건이나 비용을 틀림",
+  "time_sensitive": true,
+  "source_document_id": 9972,
+  "answer_document_ids": [
+   9972
+  ],
+  "source_name": "KONYANG_CAREER_EVENTS",
+  "title": "2021 청년 해외취업지원과정 (Global Young Challenger) 지원자 모집",
+  "source_url": "https://job.konyang.ac.kr/cop/bbs/BBSMSTR_000000001401/selectBoardArticle.do?nttId=179900&kind=&mno=sitemap_02&pageIndex=166&searchCnd=&searchWrd=",
+  "evidence": "만 34 세 이하 학사 학위 취득자"
+ },
+ {
+  "id": "rag-dev-18",
+  "category": "비교과",
+  "question": "건양대 해외봉사는 한 번에 학생을 몇 명 정도 보내요?",
+  "correct": "연 1회 약 30여 명을 파견한다(하계/동계, 사회봉사센터).",
+  "incorrect": "인원을 틀림",
+  "time_sensitive": false,
+  "source_document_id": 8862,
+  "answer_document_ids": [
+   8862
+  ],
+  "source_name": "KONYANG_EXTRACURRICULAR_CATALOG",
+  "title": "해외봉사",
+  "source_url": "https://www.konyang.ac.kr/kor/sub06_03_06_02.do",
+  "evidence": "연 1회 약 30여명의 학생들을 파견"
+ },
+ {
+  "id": "rag-dev-19",
+  "category": "비교과",
+  "question": "건양대 OPT 프로그램이 뭐예요?",
+  "correct": "미국 자매대학에서 지정 과정 이수·학위 취득 후 현지 기업 인턴십을 거쳐 국내외 기업에 취업하는 프로그램 (글로컬대학사업단, 1월).",
+  "incorrect": "다른 프로그램으로 설명함",
+  "time_sensitive": false,
+  "source_document_id": 8877,
+  "answer_document_ids": [
+   8877
+  ],
+  "source_name": "KONYANG_EXTRACURRICULAR_CATALOG",
+  "title": "OPT 프로그램",
+  "source_url": "https://www.konyang.ac.kr/kor/sub06_03_06_02.do",
+  "evidence": "미국 자매대학에서 지정된 과정을 이수하거나 학위를 취득한 후"
+ },
+ {
+  "id": "rag-dev-20",
+  "category": "비교과",
+  "question": "국립생태원 멸종위기종 보전 전문인력 양성과정(2023)은 교육비가 있고 어디서 해요?",
+  "correct": "교육비 무료, OCC오송컨벤션센터(충북 청주 오송)에서 2023.9.14.~9.16. 진행, 20명 내외.",
+  "incorrect": "유료라고 하거나 장소를 틀림",
+  "time_sensitive": true,
+  "source_document_id": 9586,
+  "answer_document_ids": [
+   9586
+  ],
+  "source_name": "KONYANG_CAREER_EVENTS",
+  "title": "[국립생태원] 2023년 국립생태원 멸종위기종 보전 전문인력 양성과정 교육생 모집",
+  "source_url": "https://job.konyang.ac.kr/cop/bbs/BBSMSTR_000000001401/selectBoardArticle.do?nttId=211824&kind=&mno=sitemap_02&pageIndex=109&searchCnd=&searchWrd=",
+  "evidence": "교 육 비: 무료"
+ },
+ {
+  "id": "rag-dev-21",
+  "category": "비교과",
+  "question": "건양대 학생포트폴리오 경진대회는 누가 참가할 수 있어요?",
+  "correct": "3~4학년(공대생) 대상, 6월, 공학교육혁신센터 운영.",
+  "incorrect": "다른 대상을 말함",
+  "time_sensitive": false,
+  "source_document_id": 8868,
+  "answer_document_ids": [
+   8868
+  ],
+  "source_name": "KONYANG_EXTRACURRICULAR_CATALOG",
+  "title": "학생포트폴리오 경진대회",
+  "source_url": "https://www.konyang.ac.kr/kor/sub06_03_06_02.do",
+  "evidence": "참여대상: 3~4학년"
+ },
+ {
+  "id": "rag-dev-22",
+  "category": "비교과",
+  "question": "건양대 독서감상문대회는 언제 하고 어디서 주관해요?",
+  "correct": "10월, 명곡도서관 주관. 블라인드 심사 후 시상금 수여.",
+  "incorrect": "시기나 주관 부서를 틀림",
+  "time_sensitive": false,
+  "source_document_id": 8867,
+  "answer_document_ids": [
+   8867
+  ],
+  "source_name": "KONYANG_EXTRACURRICULAR_CATALOG",
+  "title": "독서감상문대회",
+  "source_url": "https://www.konyang.ac.kr/kor/sub06_03_06_02.do",
+  "evidence": "운영부서: 명곡도서관"
+ },
+ {
+  "id": "rag-dev-23",
+  "category": "채용공고",
+  "question": "논산시 체육진흥과 수영강사·헬스강사 채용은 몇 명 뽑고 근무 조건이 어때요?",
+  "correct": "수영 1명·헬스 1명(총 2명), 하루 8시간 주 5일, 월요일 정기휴무, 주말(토~일) 격주 근무.",
+  "incorrect": "인원이나 근무 조건을 틀림",
+  "time_sensitive": true,
+  "source_document_id": 4690,
+  "answer_document_ids": [
+   4690
+  ],
+  "source_name": "KONYANG_JOB_BOARD",
+  "title": "[논산시체육진흥과]수영강사 및 헬스강사 채용(~11/12)",
+  "source_url": "https://job.konyang.ac.kr/cop/bbs/BBSMSTR_000000001381/selectBoardArticle.do?nttId=267021&kind=&mno=sitemap_02&pageIndex=283&searchCnd=&searchWrd=",
+  "evidence": "월요일 정기휴무"
+ },
+ {
+  "id": "rag-dev-24",
+  "category": "채용공고",
+  "question": "이화여대 의과학연구소 방사선안전관리자 채용에 지원하려면 어떤 면허가 있어야 해요?",
+  "correct": "방사성동위원소취급자 일반면허 소지자. 생명과학 실험기기 관리·사용 경험자 우대, 1년 단위 계약(최대 2년).",
+  "incorrect": "다른 면허를 말함",
+  "time_sensitive": true,
+  "source_document_id": 8691,
+  "answer_document_ids": [
+   8691
+  ],
+  "source_name": "KONYANG_JOB_BOARD",
+  "title": "(~1/9)이화여자대학교 의과학연구소 방사선안전관리자 채용 안내",
+  "source_url": "https://job.konyang.ac.kr/cop/bbs/BBSMSTR_000000001381/selectBoardArticle.do?nttId=154469&kind=&mno=sitemap_02&pageIndex=683&searchCnd=&searchWrd=",
+  "evidence": "방사성동위원소취급자 일반면허 소지자"
+ },
+ {
+  "id": "rag-dev-25",
+  "category": "채용공고",
+  "question": "메디웨일 머신러닝 엔지니어 채용은 경력이 몇 년 필요하고 근무 형태가 뭐예요?",
+  "correct": "경력 3년 이상, 정규직(근무지 서울 구로·강서·금천, 급여 면접 후 결정).",
+  "incorrect": "경력 연수나 근무 형태를 틀림",
+  "time_sensitive": true,
+  "source_document_id": 338,
+  "answer_document_ids": [
+   302,
+   338
+  ],
+  "source_name": "JOB_WEB_DETAIL",
+  "title": "[(주)메디웨일] 머신러닝 엔지니어 채용",
+  "source_url": "https://www.saramin.co.kr/zf_user/jobs/view?rec_idx=47571476",
+  "evidence": "경력 3년 ↑"
+ },
+ {
+  "id": "rag-dev-26",
+  "category": "채용공고",
+  "question": "비트바이트 프로덕트팀 서비스 기획(PM) 지원 자격이 뭐예요?",
+  "correct": "IT 서비스 기획 1년 이상 경험, Google Analytics·Firebase Analytics로 데이터 조회/분석, 디자이너·개발자 협업, 영어 Writing, 업무 체계 구축 경험.",
+  "incorrect": "자격 요건을 지어내거나 빠뜨림",
+  "time_sensitive": true,
+  "source_document_id": 7758,
+  "answer_document_ids": [
+   7758
+  ],
+  "source_name": "KONYANG_JOB_BOARD",
+  "title": "( 채용 시 마감)[(주)비트바이트] 프로덕트팀 서비스 기획(PM) 채용",
+  "source_url": "https://job.konyang.ac.kr/cop/bbs/BBSMSTR_000000001381/selectBoardArticle.do?nttId=186365&kind=&mno=sitemap_02&pageIndex=590&searchCnd=&searchWrd=",
+  "evidence": "1년 이상 IT 서비스 기획을 경험하신 분"
+ },
+ {
+  "id": "rag-dev-27",
+  "category": "채용공고",
+  "question": "건양대병원 원무팀 행정직 모집(2026년 6월 공고) 접수 기간이 언제였어요?",
+  "correct": "2026-06-26 09:00 ~ 2026-07-03 12:00, 인터넷 접수.",
+  "incorrect": "다른 기간을 말함",
+  "time_sensitive": true,
+  "source_document_id": 1881,
+  "answer_document_ids": [
+   1881
+  ],
+  "source_name": "KONYANG_HOSPITAL_RECRUIT",
+  "title": "원무팀 행정직 모집",
+  "source_url": "https://www.kyuh.ac.kr/prog/recruitNotice/view.do?pageIndex=5&searchOtptSttus=2N&noticeId=RT2026H000000134530Ud2zJ4a",
+  "evidence": "접수시작일 2026-06-26 09:00 접수종료일 2026-07-03 12:00"
+ },
+ {
+  "id": "rag-dev-28",
+  "category": "채용공고",
+  "question": "쥬디스코퍼레이션 의료기기 MR 신입 채용은 근무지랑 근무 조건이 어떻게 돼요?",
+  "correct": "서울 서초구 서운로 8(양재역 인근), 정규직 주 40시간(월~금). 신입은 4년제 대졸 이상, 급여는 면접 후 결정, 이메일 지원.",
+  "incorrect": "근무지나 조건을 틀림",
+  "time_sensitive": true,
+  "source_document_id": 3339,
+  "answer_document_ids": [
+   3339
+  ],
+  "source_name": "KONYANG_JOB_BOARD",
+  "title": "[(주)쥬디스코퍼레이션]의료기기 MR(영업) 신입/경력 채용(채용시까지)",
+  "source_url": "https://job.konyang.ac.kr/cop/bbs/BBSMSTR_000000001381/selectBoardArticle.do?nttId=284420&kind=&mno=sitemap_02&pageIndex=148&searchCnd=&searchWrd=",
+  "evidence": "정규직 ( 주 40 시간 / 월 ~ 금 )"
+ },
+ {
+  "id": "rag-dev-29",
+  "category": "채용공고",
+  "question": "현대카드/캐피탈 2021 Digital 인재 모집에서 Junior는 어떤 사람을 말해요?",
+  "correct": "신입(2021년 8월 졸업예정자 포함) 및 경력 3년 미만. 공통으로 2021년 10월 입사 가능자.",
+  "incorrect": "경력 기준을 틀림",
+  "time_sensitive": true,
+  "source_document_id": 8105,
+  "answer_document_ids": [
+   8105
+  ],
+  "source_name": "KONYANG_JOB_BOARD",
+  "title": "(~7/28) [현대카드/캐피탈] 2021년 Digital 인재 모집",
+  "source_url": "https://job.konyang.ac.kr/cop/bbs/BBSMSTR_000000001381/selectBoardArticle.do?nttId=181813&kind=&mno=sitemap_02&pageIndex=624&searchCnd=&searchWrd=",
+  "evidence": "Junior : 신입 (2021 년 8 월 졸업 예정자 포함 ) 및 경력 3 년 미만의 인재"
+ },
+ {
+  "id": "rag-dev-30",
+  "category": "채용공고",
+  "question": "컴투스 2025 썸머인턴 지니어스 7기는 인턴 기간이 언제예요?",
+  "correct": "2025년 7/7(월)~9/19(금) 총 11주, 주 5일 본사 출근.",
+  "incorrect": "기간을 틀림",
+  "time_sensitive": true,
+  "source_document_id": 4125,
+  "answer_document_ids": [
+   4125
+  ],
+  "source_name": "KONYANG_JOB_BOARD",
+  "title": "[컴투스]2025썸머인턴 지니어스 7기(~5/26)",
+  "source_url": "https://job.konyang.ac.kr/cop/bbs/BBSMSTR_000000001381/selectBoardArticle.do?nttId=274119&kind=&mno=sitemap_02&pageIndex=226&searchCnd=&searchWrd=",
+  "evidence": "인턴십 기간 : 7/7( 월 )~9/19( 금 ) 총 11 주"
+ },
+ {
+  "id": "rag-dev-31",
+  "category": "자격증",
+  "question": "방사선사 국가시험은 몇 과목에 몇 문제예요?",
+  "correct": "필기 3과목 200문제 + 실기 1과목 50문제, 모두 객관식 5지선다.",
+  "incorrect": "과목·문제 수를 틀림",
+  "time_sensitive": false,
+  "source_document_id": 11771,
+  "answer_document_ids": [
+   11771
+  ],
+  "source_name": "KUKSIWON_EXAM_DETAIL",
+  "title": "방사선사 - EXAM_SUBJECTS",
+  "source_url": "https://www.kuksiwon.or.kr/subcnt/c_2013/7/view.do?seq=7&itm_seq=09",
+  "evidence": "필기 | 3 | 200"
+ },
+ {
+  "id": "rag-dev-32",
+  "category": "자격증",
+  "question": "요양보호사 시험은 필기랑 실기 문제가 몇 개고 시험 시간은 얼마예요?",
+  "correct": "필기 35문제, 실기 45문제(객관식 5지선다), 시험시간 90분.",
+  "incorrect": "문제 수나 시간을 틀림",
+  "time_sensitive": false,
+  "source_document_id": 11795,
+  "answer_document_ids": [
+   11795
+  ],
+  "source_name": "KUKSIWON_EXAM_DETAIL",
+  "title": "요양보호사 - EXAM_SUBJECTS",
+  "source_url": "https://www.kuksiwon.or.kr/subcnt/c_2027/7/view.do?seq=7&itm_seq=35",
+  "evidence": "필기 | 1 | 35"
+ },
+ {
+  "id": "rag-dev-33",
+  "category": "자격증",
+  "question": "안경사 국가시험 문제 수 알려줘",
+  "correct": "필기 3과목 190문제, 실기 60문제.",
+  "incorrect": "문제 수를 틀림",
+  "time_sensitive": false,
+  "source_document_id": 11783,
+  "answer_document_ids": [
+   11783
+  ],
+  "source_name": "KUKSIWON_EXAM_DETAIL",
+  "title": "안경사 - EXAM_SUBJECTS",
+  "source_url": "https://www.kuksiwon.or.kr/subcnt/c_2019/7/view.do?seq=7&itm_seq=15",
+  "evidence": "필기 | 3 | 190"
+ },
+ {
+  "id": "rag-dev-34",
+  "category": "자격증",
+  "question": "치과위생사는 법적으로 어떤 업무를 할 수 있어요?",
+  "correct": "교정용 호선 장착·제거, 불소 도포, 구내 진단용 방사선 촬영, 임시 충전, 임시 부착물 장착, 부착물 제거, 치석 등 침착물 제거, 치아 본뜨기.",
+  "incorrect": "업무를 지어내거나 대부분 빠뜨림",
+  "time_sensitive": false,
+  "source_document_id": 11131,
+  "answer_document_ids": [
+   11131
+  ],
+  "source_name": "KUKSIWON_OCCUPATION_INFO",
+  "title": "치과위생사 - 국시원 직종별 시험정보",
+  "source_url": "https://www.kuksiwon.or.kr/subcnt/c_2017/1/view.do?seq=7&itm_seq=12",
+  "evidence": "치석 등 침착물(沈着物)의 제거"
+ },
+ {
+  "id": "rag-dev-35",
+  "category": "자격증",
+  "question": "의사 국가시험 필기는 몇 과목 몇 문제예요?",
+  "correct": "3과목 320문제(보건의약관계법규 20, 의학총론 60, 의학각론 1~3 각 80), 4교시.",
+  "incorrect": "과목·문제 수를 틀림",
+  "time_sensitive": false,
+  "source_document_id": 11757,
+  "answer_document_ids": [
+   11757
+  ],
+  "source_name": "KUKSIWON_EXAM_DETAIL",
+  "title": "의사 - EXAM_SUBJECTS",
+  "source_url": "https://www.kuksiwon.or.kr/subcnt/c_2/7/view.do?seq=7&itm_seq=01",
+  "evidence": "3 | 320 | 1점/1문제 | 320점"
+ },
+ {
+  "id": "rag-dev-36",
+  "category": "자격증",
+  "question": "정보처리기사 실기시험은 어떤 내용이 나와요?",
+  "correct": "요구사항 확인, 데이터 입출력 구현, 통합 구현, 서버프로그램 구현, 인터페이스 구현, 화면설계, 애플리케이션 테스트, SQL 응용, SW 개발 보안 구축, 프로그래밍 언어 활용, 응용 SW 기초기술 활용, 제품 SW 패키징.",
+  "incorrect": "필기 과목을 말하거나 내용을 지어냄",
+  "time_sensitive": false,
+  "source_document_id": 51,
+  "answer_document_ids": [
+   51
+  ],
+  "source_name": "QNET_ITEM_API",
+  "title": "정보처리기사 - 출제경향",
+  "source_url": "http://openapi.q-net.or.kr/api/service/rest/InquiryInformationTradeNTQSVC/getList",
+  "evidence": "SQL 응용(SQL 작성 등)"
+ },
+ {
+  "id": "rag-dev-37",
+  "category": "지역프로그램",
+  "question": "2026 충청권 ICT 취·창업 CDP 지원 프로그램은 뭘 지원해 주고 돈이 들어요?",
+  "correct": "AI 직무진단, 전문가·AI Agent 1:1 진로·취업 컨설팅, 개인별 CDP 로드맵, ICT 기업탐방, 취업매칭. 전 과정 무료, 모집은 2026.9.30.까지.",
+  "incorrect": "유료라고 하거나 지원 내용을 지어냄",
+  "time_sensitive": true,
+  "source_document_id": 10107,
+  "answer_document_ids": [
+   10107
+  ],
+  "source_name": "DAEJEON_YOUTH_PORTAL",
+  "title": "[2026년] 충청권 취·창업 CDP 지원프로그램",
+  "source_url": "https://www.daejeonyouthportal.kr/board/BBSMSTR_000000000251/articleView.do?commonMenuNo=180_35&searchSeq=15091",
+  "evidence": "전 과정 무료 운영"
+ },
+ {
+  "id": "rag-dev-38",
+  "category": "지역프로그램",
+  "question": "한남대 팀 프로젝트 디지털 마케팅 전문가 과정은 누가 참여할 수 있고 혜택이 뭐예요?",
+  "correct": "재학생·졸업생·지역청년(타대생 포함, 34세 이하), 30명. 무료교육·수료증·중식, 재학생은 학생경력마일리지 20점.",
+  "incorrect": "대상이나 혜택을 틀림",
+  "time_sensitive": true,
+  "source_document_id": 10190,
+  "answer_document_ids": [
+   10190
+  ],
+  "source_name": "DAEJEON_YOUTH_PORTAL",
+  "title": "팀 프로젝트 디지털 마케팅 전문가 과정",
+  "source_url": "https://www.daejeonyouthportal.kr/board/BBSMSTR_000000000251/articleView.do?commonMenuNo=180_35&searchSeq=8068",
+  "evidence": "무료교육, 수료증, 중식 제공"
+ },
+ {
+  "id": "rag-dev-39",
+  "category": "지역프로그램",
+  "question": "대전 청년성장프로젝트는 몇 살까지 이용할 수 있고 뭘 지원해요?",
+  "correct": "15~39세 청년 누구나. 청년카페 공간·초기상담·맞춤형 프로그램·후속지원 (대전일자리지원센터, 동구동락).",
+  "incorrect": "나이를 틀리거나 내용을 지어냄",
+  "time_sensitive": false,
+  "source_document_id": 284,
+  "answer_document_ids": [
+   284
+  ],
+  "source_name": "DAEJEON_YOUTH_PORTAL",
+  "title": "청년성장프로젝트",
+  "source_url": "https://www.daejeonyouthportal.kr/content/CT_000000000374/cntPage.do?commonMenuNo=438_323_324_325&dpmSectionFst=100&dpmSectionScd=",
+  "evidence": "15세~39세 청년 누구나"
+ },
+ {
+  "id": "rag-dev-40",
+  "category": "지역프로그램",
+  "question": "현대홈쇼핑 K-뉴딜아카데미 MD·커머스 전문가 양성과정 2기는 내일배움카드 없어도 신청돼요?",
+  "correct": "된다(국민내일배움카드 발급 없이 참여 가능). 만 15~34세 청년 구직자, 대전 비거주자도 가능, 교육 2026.11.02.~2027.02.19.",
+  "incorrect": "카드가 필요하다고 함",
+  "time_sensitive": true,
+  "source_document_id": 10086,
+  "answer_document_ids": [
+   10086
+  ],
+  "source_name": "DAEJEON_YOUTH_PORTAL",
+  "title": "[고용노동부 X 현대홈쇼핑] K-뉴딜아카데미 MD·커머스 전문가 양성과정 2기",
+  "source_url": "https://www.daejeonyouthportal.kr/board/BBSMSTR_000000000251/articleView.do?commonMenuNo=180_35&searchSeq=16587",
+  "evidence": "국민내일배움카드 발급 없이 참여 가능"
+ }
+]
