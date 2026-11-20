@@ -245,16 +245,7 @@ def load_posting_skills(
                 'RELATED'
           )
 
-          AND (
-                rs.verified = TRUE
-
-                OR
-
-                COALESCE(
-                    rs.confidence,
-                    0
-                ) >= :min_skill_confidence
-          )
+          AND rs.verified = TRUE
 
         ORDER BY
             r.resource_id,
@@ -272,9 +263,6 @@ def load_posting_skills(
                 {
                     "min_role_confidence":
                         MIN_ROLE_CONFIDENCE,
-
-                    "min_skill_confidence":
-                        MIN_SKILL_CONFIDENCE,
                 },
             ).mappings().all()
         )
@@ -1402,6 +1390,28 @@ def main(
 
         return
 
+
+    # Never overwrite prior RoleSkill with an empty or tiny reviewed subset.
+    # A preview is always allowed; saving requires >=80% reviewed coverage
+    # in every role with eligible postings. No stored RoleSkill is changed
+    # when this check fails.
+    incomplete = [
+        x for x in coverage
+        if x["total_postings"] > 0
+        and (
+            x["analyzed_postings"] == 0
+            or x["coverage"] < 0.80
+        )
+    ]
+    if not aggregates or incomplete:
+        summary = ", ".join(
+            f"{x['role_name']}={x['coverage']:.0%}"
+            for x in incomplete[:8]
+        )
+        raise SystemExit(
+            "[BLOCK] Reviewed-only coverage too small to save RoleSkill. "
+            "Existing rows preserved. " + summary
+        )
 
     inserted = (
         save_aggregates(

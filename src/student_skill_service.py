@@ -94,6 +94,8 @@ def load_completed_resource_skills(
 
             AND s.is_active = TRUE
 
+            AND rs.verified = TRUE
+
         ORDER BY
             r.resource_id,
             rs.skill_id
@@ -180,19 +182,7 @@ def sync_student_skills(
                 ]
             )
 
-            if (
-                row[
-                    "resource_type"
-                ]
-                == "CERTIFICATE"
 
-                and row[
-                    "relation_type"
-                ]
-                == "VERIFIED"
-            ):
-
-                verified = True
 
             student_skill_id = int(
                 conn.execute(
@@ -410,6 +400,16 @@ def load_student_skills(
 
         for row in rows
     ]
+
+
+
+def load_student_skills_for_gap(student_id: int) -> list[dict]:
+    """Read-only trusted view for GAP. Historical rows are not deleted."""
+    from src.mapping.skill_trust_policy import find_untrusted_only_skill_ids
+
+    rows = load_student_skills(student_id)
+    excluded = find_untrusted_only_skill_ids(student_id)
+    return [row for row in rows if int(row["skill_id"]) not in excluded]
 
 
 def parse_args() -> argparse.Namespace:

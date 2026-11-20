@@ -16,7 +16,7 @@ from sqlalchemy import (
 
 from src.db.database import engine
 from src.student_skill_service import (
-    load_student_skills,
+    load_student_skills_for_gap,
 )
 
 
@@ -561,7 +561,7 @@ def calculate_skill_gaps(
             row
 
         for row
-        in load_student_skills(
+        in load_student_skills_for_gap(
             request.student_id
         )
     }

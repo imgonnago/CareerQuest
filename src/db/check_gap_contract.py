@@ -1,7 +1,10 @@
 
 from __future__ import annotations
 
+from types import SimpleNamespace
+
 from pydantic import ValidationError
+from src.student_skill_service import load_student_skills_for_gap
 from sqlalchemy import text
 
 from src.db.database import engine
@@ -76,6 +79,18 @@ def main() -> None:
             SELECT COALESCE(MAX(skill_id), 0) + 100000
             FROM skill
         """)).scalar_one()
+
+    # Use exactly the trusted held-skill view that production GAP now uses.
+    # Old StudentSkill rows with only unapproved ResourceSkill evidence are NOT owned.
+    trusted_owned = load_student_skills_for_gap(student_id)
+    if trusted_owned:
+        selected = trusted_owned[0]
+        owned = SimpleNamespace(
+            skill_id=int(selected["skill_id"]),
+            name=selected["skill_name"],
+        )
+    else:
+        owned = None
 
     print(
         f"[DB] {db_name} / "

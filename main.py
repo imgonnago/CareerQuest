@@ -108,10 +108,7 @@ def fetch_all(
         raise HTTPException(
             status_code=500,
 
-            detail=(
-                f"DB 조회 실패: "
-                f"{error}"
-            ),
+            detail="DB 조회 중 오류가 발생했습니다.",
         ) from error
 
 
@@ -171,10 +168,7 @@ def fetch_scalar(
         raise HTTPException(
             status_code=500,
 
-            detail=(
-                f"DB 조회 실패: "
-                f"{error}"
-            ),
+            detail="DB 조회 중 오류가 발생했습니다.",
         ) from error
 
 
@@ -948,10 +942,7 @@ def calculate_gap(
         raise HTTPException(
             status_code=500,
 
-            detail=(
-                f"DB 조회 실패: "
-                f"{error}"
-            ),
+            detail="DB 조회 중 오류가 발생했습니다.",
         ) from error
 
 
