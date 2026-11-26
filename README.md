@@ -225,7 +225,11 @@ careerquest-ai/
 │   ├── tools/       #   도구 함수
 │   ├── prompts/     #   단계별 프롬프트
 │   ├── schemas/     #   JSON 스키마 (카드 · 결과)
-│   └── pipeline/    #   단계별 실행 · 검증
+│   ├── helpers/     #   단계와 상관없는 보조 함수 (글 정리 · 날짜 · 건양대 자료 읽기 · 대화 기록 · 화면 글)
+│   └── pipeline/    #   단계별 실행 · 검증 (stage0~5 · answer · run)
+│       ├── routes/  #     취업 가이드가 아닌 경로의 답변 (정보 질문 · 진로 고민 · 일반 대화 · 후속 질문 · 되묻기)
+│       ├── slots.py #     가이드 슬롯 정의 · 세기
+│       └── evidence_pool.py  # 근거 풀 (검색한 문서 · 본문)
 ├── backend/         # API 서버
 ├── frontend/        # 화면 (재열)
 └── docs/            # 발표 자료, 설계 문서

@@ -18,10 +18,16 @@ from collections.abc import Callable
 
 from pydantic import BaseModel, Field
 
-from engine.pipeline.answer import generate_answer, render_chat, render_markdown
+from engine.helpers.display import render_chat, render_markdown
+from engine.helpers.history import crisis_guided, latest_guide
+from engine.pipeline.answer import generate_answer
+from engine.pipeline.routes.chat import answer_chat
+from engine.pipeline.routes.clarify import clarify_answer
+from engine.pipeline.routes.counsel import SAFETY_REMINDER, answer_counsel
+from engine.pipeline.routes.followup import answer_followup
+from engine.pipeline.routes.info import answer_info
 from engine.pipeline.stage0_route import (
-    SAFETY_REMINDER, answer_chat, answer_counsel, answer_followup, answer_info, check_crisis, check_followup, clarify_answer, crisis_guided, latest_guide,
-    keep_crisis, needs_more_info, resolve_history, route_input, since_last_guide,
+    check_crisis, check_followup, keep_crisis, needs_more_info, resolve_history, route_input, since_last_guide,
 )
 from engine.pipeline.stage1_job import set_target_job
 from engine.pipeline.stage2_evidence import extract_evidence

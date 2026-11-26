@@ -1,6 +1,6 @@
 """3단계(근거 집계) 프롬프트. 역할마다 새 대화로 짧게 부른다.
 
-입력 공통: target = 1단계 결과 텍스트 (stage2_evidence.make_target)
+입력 공통: target = 1단계 결과 텍스트 (helpers/student.make_target)
 
 역할 LLM (새 대화)
   입력: target + 카드가 나온 문서마다 [D번호]·제목·출처·요약 + 그 문서 카드의 item 목록 (stage3_aggregate.render_role_docs)

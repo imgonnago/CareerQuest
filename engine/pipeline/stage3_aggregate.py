@@ -1,4 +1,5 @@
 """3단계 근거 집계: 코드(중복 제거) → 역할 LLM(문서 역할) → 이름 LLM+임베딩+합치기 LLM(Skill) → 사전 매칭(skill_id) → 코드(세기).
+본 함수: aggregate_evidence (맨 아래)
 
 1. 코드가 (doc_id, quote)가 같은 카드를 지우고 근거 번호(C1, C2 …)를 붙인다 (같은 인용이 분류만 바꿔 두 번 나옴)
 2. 역할 LLM이 카드가 나온 문서마다 역할(채용공고·자격증정보·프로젝트추천 등)을 고른다 (DocRoleList)
@@ -26,8 +27,10 @@ import re
 import time
 from collections import Counter, defaultdict
 
+from engine.helpers.student import make_target
+from engine.helpers.text import norm_quote, norm_space
 from engine.llm import LLMConfig, chat, embed
-from engine.pipeline.stage2_evidence import SLOT_OF, SLOTS, ExtractionResult, _norm, make_target
+from engine.pipeline.slots import SLOT_OF, SLOTS
 from engine.prompts.stage3_aggregate import (
     CHECK_REQUEST, CHECK_SYSTEM, MATCH_REQUEST, MATCH_SYSTEM, MERGE_REQUEST, MERGE_SYSTEM, NAME_REQUEST, NAME_SYSTEM, ROLE_REQUEST, ROLE_SYSTEM,
 )
@@ -36,6 +39,7 @@ from engine.schemas.aggregate import (
     AggregationResult, DocRole, DocRoleList, MatchCheckList, NumberedCard, SkillEntry, SkillGroupList, SkillMatchList,
     SkillNameList, SkillRow,
 )
+from engine.schemas.extraction import ExtractionResult
 from engine.tools.skill_dict import load_skill_dict
 
 # 역할별 LLM 설정
@@ -58,7 +62,7 @@ def dedup_cards(cards: list[EvidenceCard]) -> tuple[list[NumberedCard], int]:
     """(doc_id, quote)가 같은 카드는 하나만 남긴다. 기업정보가 아닌 분류를 우선한다."""
     kept: dict[tuple[str, str], EvidenceCard] = {}
     for card in cards:
-        key = (card.doc_id, _norm(card.quote))
+        key = (card.doc_id, norm_quote(card.quote))
         if key not in kept or (kept[key].category in SKIP_CATEGORIES and card.category not in SKIP_CATEGORIES):
             kept[key] = card
     numbered = [NumberedCard(**c.model_dump(), card_id=f"C{i}") for i, c in enumerate(kept.values(), 1)]
@@ -107,11 +111,6 @@ def classify_roles(target: str, docs: list[EvidenceDoc], cards: list[NumberedCar
     return {doc_id: roles.get(doc_id, "기타") for doc_id in wanted}
 
 
-def _key(name: str) -> str:
-    """표기 차이 판정용: 공백 제거, 소문자."""
-    return re.sub(r"\s+", "", name).lower()
-
-
 def _clean(name: str) -> str:
     """LLM이 이름 앞에 번호를 붙여 쓰는 경우("N3 AICE Associate")를 뗀다."""
     return re.sub(r"^\s*\[?[NIG][0-9]+\]?[\s:.)-]*", "", name).strip()
@@ -136,7 +135,7 @@ def _split_names(names: list[str]) -> list[str]:
     for name in names:
         for part in re.split(r"\s+/\s+", _clean(name)):
             if part.strip():
-                out.setdefault(_key(part), part.strip())
+                out.setdefault(norm_space(part), part.strip())
     return list(out.values())[:MAX_NAMES_PER_ITEM]
 
 
@@ -191,9 +190,9 @@ def merge_names(target: str, names: list[str]) -> tuple[dict[str, str], list[lis
     """
     canon = {}
     for n in names:
-        canon.setdefault(_key(n), n)
+        canon.setdefault(norm_space(n), n)
     uniq = list(canon.values())
-    rep = {n: canon[_key(n)] for n in names}
+    rep = {n: canon[norm_space(n)] for n in names}
     groups = [g for g in candidate_groups(uniq) if len(g) > 1] if len(uniq) > 1 else []
     if not groups:
         return rep, []
@@ -211,7 +210,7 @@ def merge_names(target: str, names: list[str]) -> tuple[dict[str, str], list[lis
     # 대표 이름끼리 표기만 다르면 다시 합친다
     canon2 = {}
     for u in uniq:
-        final[u] = canon2.setdefault(_key(final[u]), final[u])
+        final[u] = canon2.setdefault(norm_space(final[u]), final[u])
     return {n: final[r] for n, r in rep.items()}, groups
 
 
@@ -258,10 +257,10 @@ def match_skills(target: str, members: dict[str, list[str]], skill_dict: list[Sk
     by_key = {}
     for e in skill_dict:
         for t in (e.name, *e.aliases):
-            by_key.setdefault(_key(t), e)
+            by_key.setdefault(norm_space(t), e)
     found = {}
     for rep, names in members.items():
-        hit = next((by_key[_key(n)] for n in (rep, *names) if _key(n) in by_key), None)
+        hit = next((by_key[norm_space(n)] for n in (rep, *names) if norm_space(n) in by_key), None)
         if hit:
             found[rep] = hit
     rest = [rep for rep in members if rep not in found and rep not in exact_only]
@@ -404,7 +403,7 @@ def aggregate_evidence(ext: ExtractionResult, skill_dict: list[SkillEntry] | Non
         for r in dict.fromkeys(rep[n] for n in ns):
             e = entries.get(r)
             skill, sid = (e.name, e.skill_id) if e else (r, None)
-            key = sid if sid is not None else _key(skill)
+            key = sid if sid is not None else norm_space(skill)
             if key in seen:  # 다른 이름이 같은 사전 Skill로 붙으면 한 번만
                 continue
             seen.add(key)

@@ -1,7 +1,7 @@
 """0단계 입력 판단·정보 질문·진로 고민 프롬프트 ([66]). 모두 새 대화.
 
 입력 판단 LLM
-  입력: 학생 입력 (stage1_job.render_student, 업로드 문서 제외 — 판단에는 질문·폼 칸이면 충분)
+  입력: 학생 입력 (helpers/student.render_student, 업로드 문서 제외 — 판단에는 질문·폼 칸이면 충분)
   출력: 경로 JSON (schemas.route.RouteDraft): 취업 가이드 / 정보 질문 / 진로 고민
 위기 판단 LLM ([70]): 학생 입력 → 위기 신호 여부 JSON (schemas.route.CrisisCheck). 입력 판단보다 먼저 부른다
 정보 질문 — [75] 에이전트 LLM(tool calling, 한 대화): search_rag·search_requirements → 제목 목록, read_documents → 본문 전체. 도구 없이 쓴 글이 답 (INFO_AGENT_SYSTEM)

@@ -1,4 +1,5 @@
 """1단계 목표 직무 설정: 직무 설정 LLM(학생 입력 → 목표 직무 JSON) → 관심 분야 확인 LLM(관심/경험) → 코드(검증).
+본 함수: set_target_job (맨 아래). 학생 입력을 LLM에 줄 글(render_student)은 helpers/student.py
 
 검증
 - interests.original이 학생 입력에 실제로 있는지 대조 (없으면 뺌 — LLM이 관심 분야를 지어내는 것 방지)
@@ -15,8 +16,9 @@
 DB가 꺼져 있거나 직무 테이블이 없으면 목록 없이 진행한다. 목록에 없는 직무를 검색으로 보완하는 부분은 아직 없다.
 """
 import json
-import re
 
+from engine.helpers.student import render_student
+from engine.helpers.text import norm_space
 from engine.llm import LLMConfig, chat
 from engine.prompts.stage1_job import CHECK_REQUEST, CHECK_SYSTEM, SYSTEM_PROMPT, USER_REQUEST
 from engine.schemas.job import Held, Interest, InterestCheck, StudentInput, TargetJob, TargetJobDraft
@@ -24,31 +26,6 @@ from engine.tools.job_catalog import load_job_catalog
 
 JOB_SETTER = LLMConfig(temperature=0)
 INTEREST_CHECKER = LLMConfig(temperature=0)  # [24] 관심 분야 확인 (관심/경험)
-
-
-def render_student(student: StudentInput) -> str:
-    """LLM용 학생 입력 텍스트. 비어 있는 항목은 뺀다."""
-    rows = [
-        ("전공", student.major),
-        ("학년", f"{student.grade}학년" if student.grade else None),
-        ("희망 직무", student.desired_job),
-        ("보유 기술", ", ".join(student.skills)),
-        ("보유 자격증", ", ".join(student.certificates)),
-        ("프로젝트", " / ".join(student.projects)),
-        ("비교과 활동", " / ".join(student.activities)),
-        ("학생 질문", student.question),
-    ]
-    text = "학생 입력\n" + "\n".join(f"- {k}: {v}" for k, v in rows if v)
-    # [48] 업로드 문서는 본문 전체를 그대로 붙인다 (LLM은 본문 전체를 읽는다 — 자르지 않음)
-    for i, d in enumerate(student.documents, 1):
-        if d.text.strip():
-            text += f"\n\n[업로드 문서 {i}: {d.filename}]\n{d.text.strip()}"
-    return text
-
-
-def _norm(s: str) -> str:
-    """대조용: 공백 제거, 소문자."""
-    return re.sub(r"\s+", "", s).lower()
 
 
 def _keywords(keywords: list[str]) -> list[str]:
@@ -62,7 +39,7 @@ def _mentioned(original: str, source: str) -> bool:
     LLM이 보유 항목 원문의 조사를 빼고 이어 쓰는 경우("건양대에서 포스터 발표 우수상" → "건양대 포스터 발표 우수상")를 살린다.
     """
     words = original.split()
-    return _norm(original) in source or (len(words) > 1 and all(_norm(w) in source for w in words))
+    return norm_space(original) in source or (len(words) > 1 and all(norm_space(w) in source for w in words))
 
 
 def _held(drafts: list[Held], form: list[str], source: str, label: str, dropped: list[str]) -> list[Held]:
@@ -74,7 +51,7 @@ def _held(drafts: list[Held], form: list[str], source: str, label: str, dropped:
         else:
             dropped.append(f"{label}: {h.original}")
     for x in form:
-        if not any(_norm(x) in (_norm(h.original), _norm(h.name)) for h in out):
+        if not any(norm_space(x) in (norm_space(h.original), norm_space(h.name)) for h in out):
             out.append(Held(original=x, name=x))
     return out
 
@@ -100,14 +77,14 @@ def set_target_job(student: StudentInput, catalog: list[str] | None = None) -> T
     msg = chat(messages, JOB_SETTER, format=TargetJobDraft.model_json_schema())
     draft = TargetJobDraft.model_validate(json.loads(msg["content"]))
 
-    source = _norm(render_student(student))
+    source = norm_space(render_student(student))
     # [48] 기업은 폼·질문에서만 대조한다 (업로드 이력서의 전 직장·인턴 기업이 목표 기업으로 들어가지 않게)
-    form_source = _norm(render_student(student.model_copy(update={"documents": []})))
+    form_source = norm_space(render_student(student.model_copy(update={"documents": []})))
     dropped = []
     # [25] 기업은 학생 표기(original)로 대조하고, 검색에는 LLM이 고친 공식명(name)·키워드를 쓴다
     companies = []
     for c in draft.companies:
-        if _norm(c.original) in form_source:
+        if norm_space(c.original) in form_source:
             c.keywords = _keywords(c.keywords) or [c.name]
             companies.append(c)
         else:
@@ -116,19 +93,19 @@ def set_target_job(student: StudentInput, catalog: list[str] | None = None) -> T
     skills = _held(draft.skills, student.skills, source, "보유 기술", dropped)
     certificates = _held(draft.certificates, student.certificates, source, "자격증", dropped)
     # [42] LLM이 자격증을 skills에도 넣는 경우가 있어 자격증과 같은 것은 skills에서 뺀다
-    cert_names = {_norm(n) for h in certificates for n in (h.original, h.name)}
-    skills = [h for h in skills if _norm(h.name) not in cert_names and _norm(h.original) not in cert_names]
+    cert_names = {norm_space(n) for h in certificates for n in (h.original, h.name)}
+    skills = [h for h in skills if norm_space(h.name) not in cert_names and norm_space(h.original) not in cert_names]
     projects = _held(draft.projects, student.projects, source, "프로젝트", dropped)
     # 관심 분야로 들어오면 안 되는 것: 희망 직무 그 자체, 기업명이 든 표현 (LLM이 자주 섞음)
-    not_interest = {_norm(student.desired_job or ""), _norm(draft.job_title)}
-    company_names = [_norm(n) for c in companies for n in (c.original, c.name)]
+    not_interest = {norm_space(student.desired_job or ""), norm_space(draft.job_title)}
+    company_names = [norm_space(n) for c in companies for n in (c.original, c.name)]
     # [24] 경험으로 판정된 관심 분야는 projects로 옮긴다 (원문이 학생 입력에 있을 때만)
     experienced = check_interests(student, draft.interests)
     for i in sorted(experienced):
         it = draft.interests[i]
         # 직무 설정 LLM이 이미 projects에 넣은 것(원문이 겹치거나 이름이 같음)은 다시 넣지 않는다
-        orig = _norm(it.original)
-        if orig in source and not any(orig in _norm(h.original) or _norm(it.name) == _norm(h.name) for h in projects):
+        orig = norm_space(it.original)
+        if orig in source and not any(orig in norm_space(h.original) or norm_space(it.name) == norm_space(h.name) for h in projects):
             projects.append(Held(original=it.original, name=it.name))
         dropped.append(f"관심 분야(경험 → projects): {it.original}")
     held = skills + certificates + projects
@@ -137,13 +114,13 @@ def set_target_job(student: StudentInput, catalog: list[str] | None = None) -> T
         if i in experienced:
             continue
         it.keywords = _keywords(it.keywords)
-        orig = _norm(it.original)
+        orig = norm_space(it.original)
         if orig not in source:
             dropped.append(f"관심 분야: {it.original}")
         elif orig in not_interest or any(n in orig for n in company_names):
             dropped.append(f"관심 분야(직무·기업과 중복): {it.original}")
         # [24] 이미 한 것(보유 항목 원문 안에 들어 있거나 이름이 같음)은 관심 분야에서 뺀다 — 프롬프트 규칙을 놓칠 때 대비
-        elif any(orig in _norm(h.original) or _norm(it.name) == _norm(h.name) for h in held):
+        elif any(orig in norm_space(h.original) or norm_space(it.name) == norm_space(h.name) for h in held):
             dropped.append(f"관심 분야(이미 보유·경험): {it.original}")
         else:
             interests.append(it)

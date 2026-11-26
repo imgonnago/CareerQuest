@@ -13,7 +13,8 @@ db 결과에도 profile 대조를 한 번 더 한다 — 학생이 폼에 적었
 """
 import logging
 
-from engine.pipeline.stage3_aggregate import _key, match_skills
+from engine.helpers.text import norm_space
+from engine.pipeline.stage3_aggregate import match_skills
 from engine.schemas.aggregate import SkillEntry, SkillRow
 from engine.schemas.job import TargetJob
 from engine.schemas.rank import RowGap
@@ -23,7 +24,7 @@ log = logging.getLogger(__name__)
 
 def row_key(row: SkillRow) -> int | str:
     """집계 표 줄 키: skill_id, 없으면 표기 무시한 Skill 이름 (3단계 build_table과 같은 기준)."""
-    return row.skill_id if row.skill_id is not None else _key(row.skill)
+    return row.skill_id if row.skill_id is not None else norm_space(row.skill)
 
 
 def held_names(job: TargetJob) -> dict[str, list[str]]:
@@ -55,16 +56,16 @@ def gap_from_profile(rows: list[SkillRow], job: TargetJob, target: str,
                      skill_dict: list[SkillEntry] | None, log_fn=print) -> list[RowGap]:
     held_ids = _profile_ids(target, job, skill_dict, log_fn)
     held = held_names(job)
-    by_key = {_key(n): name for group in held.values() for name, ns in group.items() for n in ns}
-    certs = {_key(n): name for name, ns in held["cert"].items() for n in ns}
+    by_key = {norm_space(n): name for group in held.values() for name, ns in group.items() for n in ns}
+    certs = {norm_space(n): name for name, ns in held["cert"].items() for n in ns}
     out = []
     for r in rows:
         hit = held_ids.get(r.skill_id) if r.skill_id is not None else None
         if hit is None:  # 사전 매칭이 안 됐어도 이름이 같으면 보유 (사전에 없는 Skill, 활동 이름 등)
-            hit = next((by_key[_key(n)] for n in (r.skill, *r.names) if _key(n) in by_key), None)
+            hit = next((by_key[norm_space(n)] for n in (r.skill, *r.names) if norm_space(n) in by_key), None)
         if hit is None and r.slot == "자격증":  # [63] 학생 "AICE" ↔ 근거 "AICE Associate": 근거 이름의 첫 단어가 학생 자격증 이름
-            hit = next((certs[_key(n.split()[0])] for n in (r.skill, *r.names)
-                        if len(n.split()) > 1 and _key(n.split()[0]) in certs), None)
+            hit = next((certs[norm_space(n.split()[0])] for n in (r.skill, *r.names)
+                        if len(n.split()) > 1 and norm_space(n.split()[0]) in certs), None)
         if hit is not None:
             gap = "보유"
         else:

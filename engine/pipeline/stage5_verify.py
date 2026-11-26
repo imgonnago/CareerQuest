@@ -1,4 +1,5 @@
 """5단계 검증 (코드): 근거 순위 카드 ↔ 집계 표·원문 대조, 교과목 개설 학년, 활동 마감일.
+본 함수: verify_slot(4단계가 슬롯마다 부름)·check_ranks(4단계 끝에 한 번). 날짜 읽기·지난 시기는 helpers/dates.py
 
 verify_slot — 우선순위 LLM 출력 하나를 근거 순위 카드로 바꾸며 판단 오류를 찾는다. 판단 오류가 있으면 4단계가 그 슬롯만 다시 부른다.
   - 판단 오류: 후보에 없는 R번호, 빈 이유·할 일, 이유의 숫자가 근거 문서·카드 수와 다름(숫자는 쓰지 말라고 함),
@@ -20,7 +21,10 @@ check_ranks — 검증을 통과한 카드 전체를 한 번 더 본다 (다시 
 import re
 from datetime import date
 
-from engine.pipeline.stage2_evidence import ACTIVITY, _norm
+from engine.helpers.checks import ROW_REF, TERM_MISMATCH, table_companies
+from engine.helpers.dates import find_dates, past_terms, term_of, today_int
+from engine.helpers.text import norm_quote, tidy
+from engine.pipeline.slots import ACTIVITY
 from engine.schemas.aggregate import AggregationResult, SkillRow
 from engine.schemas.rank import RankCard, RankDraft, RankIssue, RowGap
 
@@ -28,8 +32,6 @@ MIN_TEXT = 4                 # 이유·할 일 최소 글자 수
 COUNT_WORDS = re.compile(r"(\d+)\s*(?:건|개|곳|군데|번|회|개사)")
 # 마감일 찾기
 DEADLINE_WORD = re.compile(r"마감|접수|모집|신청|지원\s*기간|기간|까지|~|∼|-\s*\d")
-FULL_DATE = re.compile(r"(20\d{2})\s*[.\-/년]\s*(\d{1,2})\s*[.\-/월]\s*(\d{1,2})")
-SHORT_DATE = re.compile(r"(?<![\d.])(\d{1,2})\s*[./월]\s*(\d{1,2})\s*일?(?![\d.])")
 WINDOW_BEFORE, WINDOW_AFTER = 2, 8   # 활동 이름이 나온 줄 앞뒤로 날짜를 찾을 줄 수
 OLD_DOC_DAYS = 365           # 마감일을 못 찾았을 때 이보다 오래된 문서면 notes에 적음
 # [63] 끝난 행사 기사("10월 10일 … 성료", "개최했다") — 인용의 날짜가 모두 지났으면 지난 회차
@@ -41,57 +43,12 @@ SCHOOL_ONLY = re.compile(r"(초등학생|중학생|고등학생|청소년)")
 OPEN_TO_ALL = re.compile(r"대학생|대학\s*\(?원\)?생|일반인?|누구나|전\s*국민|성인|고등학생\s*이상|제한\s*없")
 
 
-# qwen이 숫자·영문 뒤에 띄어 쓰는 것("3 학년 2 학기", "Python 과")을 붙인다
-UNIT_SPACE = re.compile(r"(\d) (학년|학기|년|월|일|개월|주|시간|분|개|건|회|차|기|대)")
-# 할 일 시기: "2026년 1학기", "2026년 상반기" — 오늘보다 앞이면 판단 오류
-# [63] 후보 번호가 할 일·이유에 새어 나옴("R1 미니 인턴십"), 학기와 방학이 안 맞음("1학기 겨울방학")
-ROW_REF = re.compile(r"\bR\d+\b")
-TERM_MISMATCH = re.compile(r"1\s*학기\s*(중\s*)?겨울\s*방학|2\s*학기\s*(중\s*)?여름\s*방학")
-TERM_TEXT = re.compile(r"(20\d{2})\s*년\s*(?:([12])\s*학기|(상반기|하반기))")
-MONTH_TEXT = re.compile(r"(20\d{2})\s*년\s*(\d{1,2})\s*월")  # [64] "2026년 1월 겨울방학" (오늘 2026년 11월)
-PARTICLE_SPACE = re.compile(r"([A-Za-z0-9)]) (과|와|를|을|이|가|은|는|에|의|로|으로|에서|도|만)(?=[\s.,]|$)")
-
-
-def tidy(text: str) -> str:
-    return PARTICLE_SPACE.sub(r"\1\2", UNIT_SPACE.sub(r"\1\2", " ".join(text.split())))
-
-
-def _today(today: int | None) -> int:
-    return today or int(date.today().strftime("%Y%m%d"))
-
-
-def term_of(day: int) -> tuple[int, int]:
-    """YYYYMMDD → (학년도, 학기). 1학기 3~8월, 2학기 9~2월 (1·2월은 앞 해 2학기)."""
-    y, m = day // 10000, day // 100 % 100
-    return (y, 1) if 3 <= m <= 8 else (y, 2) if m >= 9 else (y - 1, 2)
-
-
-def past_terms(text: str, today: int) -> list[str]:
-    """할 일·이유에 적힌 시기 중 이미 지난 것 ("2026년 1학기"·"2026년 상반기")."""
-    now = term_of(today)
-    out = []
-    for m in TERM_TEXT.finditer(text):
-        y = int(m.group(1))
-        term = int(m.group(2)) if m.group(2) else (1 if m.group(3) == "상반기" else 2)
-        if (y, term) < now:
-            out.append(m.group(0))
-    for m in MONTH_TEXT.finditer(text):
-        if (int(m.group(1)), int(m.group(2))) < (today // 10000, today // 100 % 100):
-            out.append(m.group(0))
-    return out
-
-
-def _companies(agg: AggregationResult) -> set[str]:
-    """집계 표 전체에 나온 기업 이름 (지어낸 기업 확인용)."""
-    return {c for r in agg.skills for c in r.companies if len(c) >= 2}
-
-
 def verify_slot(slot: str, drafts: list[RankDraft], cands: list[tuple[SkillRow, RowGap]],
                 agg: AggregationResult, cap: int, today: int | None = None) -> tuple[list[RankCard], list[RankIssue]]:
     """우선순위 LLM 출력 → 근거 순위 카드 + 문제 목록."""
-    today = _today(today)
+    today = today_int(today)
     issues, out, seen = [], [], set()
-    all_companies = _companies(agg)
+    all_companies = table_companies(agg)
     job_companies = {n for c in agg.job.companies for n in (c.name, c.original, *c.keywords)}
     for d in drafts:
         i = int(d.row[1:]) - 1
@@ -143,32 +100,13 @@ def verify_slot(slot: str, drafts: list[RankDraft], cands: list[tuple[SkillRow, 
     return out, issues
 
 
-def _dates(line: str, year_hint: int) -> list[int]:
-    """줄에서 날짜(YYYYMMDD) 찾기. 연도 없는 "11.30"·"11월 30일"은 같은 줄의 연도, 없으면 문서 작성 연도."""
-    out = []
-    years = []
-    for m in FULL_DATE.finditer(line):
-        y, mo, d = map(int, m.groups())
-        years.append(y)
-        if 1 <= mo <= 12 and 1 <= d <= 31:
-            out.append(y * 10000 + mo * 100 + d)
-    rest = FULL_DATE.sub(" ", line)
-    y = years[-1] if years else year_hint
-    if y:
-        for m in SHORT_DATE.finditer(rest):
-            mo, d = map(int, m.groups())
-            if 1 <= mo <= 12 and 1 <= d <= 31:
-                out.append(y * 10000 + mo * 100 + d)
-    return [v for v in out if 20150101 <= v <= 20351231]
-
-
 def find_deadline(names: list[str], text: str, published_at: int | None, single: bool) -> int | None:
     """활동 이름이 나온 줄 근처(앞 WINDOW_BEFORE·뒤 WINDOW_AFTER줄)에서 접수·마감 줄의 가장 늦은 날짜.
 
     문서가 이 활동 하나만 다루면(single) 이름 위치와 상관없이 문서 전체의 접수·마감 줄에서 찾는다 ([67])."""
     lines = text.splitlines()
-    keys = [_norm(n).lower() for n in names if len(_norm(n)) >= 2]
-    hits = [i for i, ln in enumerate(lines) if any(k in _norm(ln).lower() for k in keys)]
+    keys = [norm_quote(n).lower() for n in names if len(norm_quote(n)) >= 2]
+    hits = [i for i, ln in enumerate(lines) if any(k in norm_quote(ln).lower() for k in keys)]
     if single:  # [67] 활동 하나만 다루는 글은 문서 전체 (이름은 1~13줄, 마감일은 24줄이라 창 밖이던 공모전 공고)
         idx = range(len(lines))
     elif hits:
@@ -176,7 +114,7 @@ def find_deadline(names: list[str], text: str, published_at: int | None, single:
     else:
         return None
     year = published_at // 10000 if published_at else None
-    found = [d for j in idx if DEADLINE_WORD.search(lines[j]) for d in _dates(lines[j], year)]
+    found = [d for j in idx if DEADLINE_WORD.search(lines[j]) for d in find_dates(lines[j], year)]
     return max(found) if found else None
 
 
@@ -200,7 +138,7 @@ def _activity_deadline(rank: RankCard, agg: AggregationResult, cards: dict, toda
                           and cards[c].category in ("대외활동", "교내프로그램")})
             d = find_deadline(names, text, doc.published_at, single=n_acts <= 1)
         if d is None and PAST_EVENT.search(quotes + doc.title):
-            dates = _dates(quotes + " " + doc.title, year)
+            dates = find_dates(quotes + " " + doc.title, year)
             # [67] 날짜가 없는 결과 기사("…논문경진대회 성료", "지난 3일 … 개최했다")는 작성일이 오늘보다 앞이면 끝난 행사
             ended = ended or (max(dates) < today if dates else bool(
                 ENDED_FOR_SURE.search(quotes + " " + doc.title) and doc.published_at and doc.published_at < today))
@@ -247,7 +185,6 @@ def is_event(r: RankCard, cards: dict) -> bool:
 SCHEDULE_MAX = 3          # [67] 순위 카드마다 붙일 일정 수
 SCHEDULE_CONTEXT = 60     # 일정 줄 길이 (날짜 앞뒤 글자 수)
 
-
 SCHEDULE_WORD = re.compile(r"시험|접수|원서|필기|실기|회차|제\s*\d+\s*회|일정|마감|기간|발표|모집|신청|개최|본선|예선")
 
 
@@ -263,8 +200,8 @@ def upcoming_dates(r: RankCard, agg: AggregationResult, cards: dict, today: int)
     일정 말(시험·접수·원서·마감 …)이 있는 줄. 인용에는 설명 문장만 들어가는 일이 많아 본문도 본다 (코드가 날짜만 찾음 — LLM 입력을 자르는 것이 아님).
     활동은 앞에서 찾은 마감일(deadline)도 넣는다."""
     docs = {d.doc_id: d for d in agg.docs}
-    names = [n for n in dict.fromkeys([r.skill, *[cards[c].item for c in r.card_ids if c in cards]]) if len(_norm(n)) >= 2]
-    keys = [_norm(n).lower() for n in names]
+    names = [n for n in dict.fromkeys([r.skill, *[cards[c].item for c in r.card_ids if c in cards]]) if len(norm_quote(n)) >= 2]
+    keys = [norm_quote(n).lower() for n in names]
     out: dict[int, str] = {}
     if r.deadline and r.deadline >= today:
         out[r.deadline] = "접수 마감"
@@ -272,7 +209,7 @@ def upcoming_dates(r: RankCard, agg: AggregationResult, cards: dict, today: int)
     def take(line: str, year: int | None, need_word: bool) -> None:
         if need_word and not SCHEDULE_WORD.search(line):
             return
-        for d in _dates(line, year):
+        for d in find_dates(line, year):
             if d >= today and d not in out:
                 out[d] = _clip(line)
 
@@ -288,8 +225,8 @@ def upcoming_dates(r: RankCard, agg: AggregationResult, cards: dict, today: int)
         if not text:
             continue
         lines = text.splitlines()
-        whole = any(k in _norm(doc.title).lower() for k in keys)
-        hits = range(len(lines)) if whole else sorted({j for i, ln in enumerate(lines) if any(k in _norm(ln).lower() for k in keys)
+        whole = any(k in norm_quote(doc.title).lower() for k in keys)
+        hits = range(len(lines)) if whole else sorted({j for i, ln in enumerate(lines) if any(k in norm_quote(ln).lower() for k in keys)
                                                      for j in range(max(0, i - WINDOW_BEFORE), min(len(lines), i + WINDOW_AFTER + 1))})
         for j in hits:
             take(lines[j], year, need_word=True)
@@ -301,7 +238,7 @@ def check_ranks(ranks: list[RankCard], agg: AggregationResult,
     """검증을 통과한 순위 카드 확인: 인용 재대조 → 교과목 학년 → 활동 대상·마감일. 슬롯 안 순위를 다시 매긴다.
 
     반환: (추천, 문제, 지난 회차). [65] 마감된 활동은 다시 열릴 수 있어 "이런 활동이 있다"는 참고로 남기되 추천에서는 뺀다."""
-    today = _today(today)
+    today = today_int(today)
     cards = {c.card_id: c for c in agg.cards}
     grade = agg.job.student.grade
     issues, out, past = [], [], []
@@ -314,7 +251,7 @@ def check_ranks(ranks: list[RankCard], agg: AggregationResult,
                 issues.append(RankIssue(slot=r.slot, kind="주의", message=f"{r.skill}: 근거 번호 {cid}의 카드가 없음"))
                 continue
             text = agg.texts.get(c.doc_id)
-            if text is not None and _norm(c.quote) not in _norm(text):
+            if text is not None and norm_quote(c.quote) not in norm_quote(text):
                 issues.append(RankIssue(slot=r.slot, kind="주의", message=f"{r.skill}: {cid} 인용이 본문에 없음 (뺌)"))
                 continue
             kept.append(cid)

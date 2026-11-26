@@ -1,7 +1,7 @@
 """1단계(목표 직무 설정) 프롬프트.
 
 직무 설정 LLM
-  입력: 학생 입력 (stage1_job.render_student, [48] 업로드 문서 본문 전체 포함) + (있으면) 표준 직무 목록
+  입력: 학생 입력 (helpers/student.render_student, [48] 업로드 문서 본문 전체 포함) + (있으면) 표준 직무 목록
   출력: 목표 직무 JSON (schemas.job.TargetJobDraft)
 관심 분야 확인 LLM (새 대화, interests가 있을 때만)
   입력: 학생 입력 + 직무 설정 LLM이 고른 관심 분야 목록 (K번호, stage1_job.check_interests)

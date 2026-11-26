@@ -1,4 +1,5 @@
 """4단계 우선순위 판단: 코드(후보·Gap) → 우선순위 LLM(슬롯마다) → 5단계 검증(판단 오류면 그 슬롯만 다시) → 근거 순위 카드.
+본 함수: prioritize (맨 아래). 오늘 날짜·학기(today_text)는 helpers/dates.py, 보유 항목 글(render_held)은 helpers/student.py
 
 1. 코드가 근거 집계 표(3단계 SkillRow)를 가이드 슬롯별로 나누고, Gap(engine/tools/gap.py)으로 학생이 이미 가진 줄은 뺀다
    (뺀 줄은 RankingResult.held — 최종 답변의 "이미 갖춘 것")
@@ -11,12 +12,13 @@
 """
 import json
 import time
-from datetime import date
 from collections import defaultdict
 
+from engine.helpers.dates import today_text
+from engine.helpers.student import make_target, render_held
 from engine.llm import LLMConfig, chat
-from engine.pipeline.stage2_evidence import ITEM_CAPS, SLOT_PRIORITY, make_target
-from engine.pipeline.stage5_verify import check_ranks, term_of, verify_slot
+from engine.pipeline.slots import ITEM_CAPS, SLOT_PRIORITY
+from engine.pipeline.stage5_verify import check_ranks, verify_slot
 from engine.prompts.stage4_rank import RANK_REQUEST, RANK_SYSTEM, RETRY_NOTE, SLOT_RANK_GUIDE
 from engine.schemas.aggregate import AggregationResult, NumberedCard, SkillEntry, SkillRow
 from engine.schemas.rank import RankCard, RankDraft, RankDraftList, RankingResult, RankIssue, RowGap
@@ -64,33 +66,6 @@ def render_candidates(cands: list[tuple[SkillRow, RowGap]], cards: dict[str, Num
         lines.append(f"R{i} {r.skill} | {g.gap}{level} | 근거 문서 {r.doc_count} ({role}) | 분류: {cat}{company}"
                      f"{_course_info(r, cards)} | 근거 항목: {items}")
     return "\n".join(lines)
-
-
-def render_held(agg: AggregationResult, held: list[RowGap]) -> str:
-    job = agg.job
-    lines = []
-    if job.skills:
-        lines.append("보유 기술: " + ", ".join(h.name for h in job.skills))
-    if job.certificates:
-        lines.append("자격증: " + ", ".join(h.name for h in job.certificates))
-    if job.projects:
-        lines.append("해 본 프로젝트: " + ", ".join(h.name for h in job.projects))
-    if job.student.activities:
-        lines.append("참여한 활동: " + ", ".join(job.student.activities))
-    if held:
-        lines.append("근거에 나왔지만 이미 가진 것: " + ", ".join(dict.fromkeys(g.skill for g in held)))
-    return "\n".join(lines) or "없음"
-
-
-def today_text(today: int | None = None) -> str:
-    """오늘 날짜와 지금·다음 학기. 예: 2026년 11월 4일 — 지금 2026년 2학기, 다음 학기 2027년 1학기"""
-    day = today or int(date.today().strftime("%Y%m%d"))
-    y, t = term_of(day)
-    ny, nt = (y, 2) if t == 1 else (y + 1, 1)
-    # [65] 방학을 학기에 붙여 "2027년 1학기 겨울방학"처럼 쓰는 일이 잦아 이번 방학을 날짜로 적어 준다
-    vacation = (f"이번 여름방학 {y}년 7~8월" if t == 1 else f"이번 겨울방학 {y}년 12월~{y + 1}년 2월")
-    return (f"{day // 10000}년 {day // 100 % 100}월 {day % 100}일 — 지금 {y}년 {t}학기, {vacation}, 다음 학기 {ny}년 {nt}학기 "
-            f"(그 전 학기·연도는 이미 지남. 방학은 \"{y}년 겨울방학\"처럼 쓰고 \"1학기 겨울방학\"처럼 학기에 붙이지 않음)")
 
 
 def judge_slot(target: str, held_text: str, slot: str, cands: list[tuple[SkillRow, RowGap]],

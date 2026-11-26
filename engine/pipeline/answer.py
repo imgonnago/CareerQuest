@@ -1,4 +1,5 @@
 """결과 생성: 검증 통과 근거 순위 카드 + (card_id로 찾은) 상세 근거 카드 → 최종 답변(GuideResult).
+본 함수: generate_answer. 출처 구분(source_label)은 helpers/sources.py, 확인용 화면 글(render_chat·render_markdown)은 helpers/display.py
 
 - 코드가 슬롯별 항목을 만든다: 순위·이름·보유 여부·할 일·이유(4단계) + 마감일·학년·주의(5단계) + 근거 인용·출처 링크·출처 구분
 - [64] 답변 LLM이 같은 목록으로 학생 질문에 대화하듯 답하는 글을 쓴다 (prompts/answer.py ANSWER_*, JSON이 아닌 글).
@@ -9,14 +10,17 @@
 import json
 import re
 
+from engine.helpers.checks import ROW_REF, TERM_MISMATCH, table_companies
+from engine.helpers.dates import FULL_DATE, past_terms, today_int, today_text
+from engine.helpers.sources import SOURCE_ORDER, source_label
+from engine.helpers.student import make_target, render_held
+from engine.helpers.text import tidy, tidy_lines
 from engine.llm import LLMConfig, chat
-from engine.pipeline.stage2_evidence import ACTIVITY, make_target
-from engine.pipeline.stage5_verify import ROW_REF, TERM_MISMATCH, _companies, past_terms, tidy
-from engine.pipeline.stage4_rank import render_held, today_text
+from engine.pipeline.slots import ACTIVITY
 from engine.prompts.answer import ANSWER_REQUEST, ANSWER_RETRY, ANSWER_SYSTEM, SUMMARY_REQUEST, SUMMARY_SYSTEM
 from engine.schemas.aggregate import AggregationResult, NumberedCard
 from engine.schemas.evidence import EvidenceDoc
-from engine.schemas.rank import GuideEvidence, GuideItem, GuideResult, GuideSection, RankCard, RankingResult, SourceLabel, SummaryDraft
+from engine.schemas.rank import GuideEvidence, GuideItem, GuideResult, GuideSection, RankCard, RankingResult, SummaryDraft
 
 WRITER = LLMConfig(temperature=0.3)
 ANSWER_WRITER = LLMConfig(temperature=0.3, num_predict=4096)  # [64] 긴 글. 되풀이 출력이 끝없이 가지 않게 상한
@@ -25,22 +29,8 @@ MIN_ANSWER_CHARS = 300
 MIN_COVERAGE = 0.5        # 추천 이름 중 글에 나와야 하는 비율
 MAX_EVIDENCE = 3          # 항목마다 보여 줄 근거 (서로 다른 문서)
 SUMMARY_QUOTES = 2        # 총평 LLM에 항목마다 줄 인용 수
-OFFICIAL_SUFFIX = (".go.kr", ".ac.kr", ".or.kr", ".re.kr", ".gov", ".edu")
 CARD_REF = re.compile(r"\[(C\d+)\]")
 ACTIVITY_KINDS = ("대외활동", "교내프로그램", "교과목")
-
-
-def source_label(doc: EvidenceDoc) -> SourceLabel:
-    if doc.provider == "rag":
-        return "건양대 자료"
-    if doc.evidence_level != "fulltext":
-        return "검색 요약"
-    if doc.kind in ("blog", "cafe"):
-        return "커뮤니티"
-    return "공식" if doc.domain.endswith(OFFICIAL_SUFFIX) else "웹"
-
-
-SOURCE_ORDER = {"건양대 자료": 0, "공식": 1, "웹": 2, "커뮤니티": 3, "검색 요약": 4}
 
 
 def pick_evidence(rank: RankCard, cards: dict[str, NumberedCard], docs: dict[str, EvidenceDoc],
@@ -126,7 +116,7 @@ def render_answer_input(sections: list[GuideSection]) -> str:
     return "\n".join(lines)
 
 
-def _mentioned(it: GuideItem, text: str) -> bool:
+def _item_in_text(it: GuideItem, text: str) -> bool:
     t = re.sub(r"\s+", "", text).lower()
     return any(re.sub(r"\s+", "", n).lower() in t for n in (it.title, it.skill) if n)
 
@@ -141,9 +131,7 @@ PAST_WORD = re.compile(r"지난|마감|끝난|다음\s*(모집|회차|해|번)|�
 def check_answer(text: str, sections: list[GuideSection], agg: AggregationResult, today: int | None = None,
                  past: list[GuideItem] = ()) -> tuple[str, list[str]]:
     """[64] 대화형 답변 검사. 반환: (보여 주지 않은 [C번호]를 지운 글, 다시 쓰게 할 문제 목록)."""
-    from engine.pipeline.stage5_verify import _today
-
-    today = _today(today)
+    today = today_int(today)
     items = [it for s in sections for it in s.items]
     shown = {e.card_id for it in [*items, *past] for e in it.evidence[:SUMMARY_QUOTES]}
     text = CARD_REF.sub(lambda m: m.group(0) if m.group(1) in shown else "", text)
@@ -162,7 +150,7 @@ def check_answer(text: str, sections: list[GuideSection], agg: AggregationResult
     # 근거에 없는 기업: 집계 표에 나온 기업 중 추천 목록(이름·할 일·이유·인용·제목)과 학생 관심 기업에 없는 것
     listed = (render_answer_input(sections) + " " + render_past(list(past)) + " "
               + " ".join(n for c in agg.job.companies for n in (c.name, c.original)))
-    foreign = [c for c in _companies(agg) if c in text and c not in listed]
+    foreign = [c for c in table_companies(agg) if c in text and c not in listed]
     if foreign:
         issues.append(f"추천 목록에 없는 기업을 씀: {', '.join(foreign)}")
     if "○○" in text or re.search(r"(?<![A-Za-z])OO(?![A-Za-z])", text):  # [67] 예시의 자리표시자를 그대로 옮김. [73] ROOKIE 같은 단어 안의 OO는 아님
@@ -172,7 +160,6 @@ def check_answer(text: str, sections: list[GuideSection], agg: AggregationResult
     # [67] 일정 목록에 없는 날짜 (오늘 이후 날짜만 — 지난 날짜는 past_terms가 봄)
     allowed = {re.sub(r"\s", "", d.split(" — ")[0]) for it in [*items, *past] for d in it.schedule}
     allowed |= {f"{it.deadline // 10000}.{it.deadline // 100 % 100}.{it.deadline % 100}" for it in [*items, *past] if it.deadline}
-    from engine.pipeline.stage5_verify import FULL_DATE
     odd = [m.group(0) for m in FULL_DATE.finditer(text)
            if f"{int(m.group(1))}.{int(m.group(2))}.{int(m.group(3))}" not in allowed
            and int(m.group(1)) * 10000 + int(m.group(2)) * 100 + int(m.group(3)) >= today]
@@ -181,14 +168,14 @@ def check_answer(text: str, sections: list[GuideSection], agg: AggregationResult
     # [65] 지난 회차를 할 일로 권함
     for it in past:
         for sent in re.split(r"(?<=[.!?。])\s+|\n", text):
-            if _mentioned(it, sent) and RECOMMEND_VERB.search(sent) and not PAST_WORD.search(sent):
+            if _item_in_text(it, sent) and RECOMMEND_VERB.search(sent) and not PAST_WORD.search(sent):
                 issues.append(f"마감된 '{it.title}'를 할 일처럼 권함 — 지난 회차라고 말하고 다음 모집 확인 정도로만: {sent.strip()[:80]}")
                 break
     # [65] 슬롯을 통째로 건너뜀 (자격증·활동 문단 없이 빈 줄만 남은 일이 있음)
-    skipped = [s.slot for s in sections if s.items and not any(_mentioned(it, text) for it in s.items)]
+    skipped = [s.slot for s in sections if s.items and not any(_item_in_text(it, text) for it in s.items)]
     if skipped:
         issues.append(f"이 슬롯의 추천을 하나도 말하지 않음: {', '.join(skipped)} — 슬롯마다 추천 이름을 그대로 써서 다룰 것")
-    missed = [it.title for it in items if not _mentioned(it, text)]
+    missed = [it.title for it in items if not _item_in_text(it, text)]
     if items and len(missed) > len(items) * (1 - MIN_COVERAGE):
         issues.append(f"추천을 많이 빠뜨림 ({len(missed)}/{len(items)}개): {', '.join(missed[:8])}. 목록의 이름 그대로 쓸 것")
     return text, issues
@@ -206,7 +193,7 @@ def write_answer(target: str, held: str, sections: list[GuideSection], agg: Aggr
                     {"role": "user", "content": ANSWER_REQUEST.format(target=target, today=today_text(today), held=held,
                                                                       ranks=ranks, past=past_text, retry=retry)}]
         try:
-            text = tidy_answer(chat(messages, ANSWER_WRITER)["content"])
+            text = tidy_lines(chat(messages, ANSWER_WRITER)["content"])
         except Exception as e:
             issues = [f"답변 생성 실패 ({type(e).__name__})"]
             all_issues += issues
@@ -216,11 +203,6 @@ def write_answer(target: str, held: str, sections: list[GuideSection], agg: Aggr
         if not issues:
             return text, all_issues
     return None, all_issues
-
-
-def tidy_answer(text: str) -> str:
-    """줄 구조(문단·목록)는 두고 줄마다 띄어쓰기만 정리 (stage5_verify.tidy는 줄바꿈까지 합침)."""
-    return "\n".join(tidy(ln) if ln.strip() else "" for ln in text.strip().splitlines())
 
 
 def cited_sources(text: str, sections: list[GuideSection], past: list[GuideItem] = ()) -> list[GuideEvidence]:
@@ -282,41 +264,3 @@ def generate_answer(ranking: RankingResult, agg: AggregationResult, today: int |
                        answer_by_code=answer_by_code, answer_issues=issues, summary=summary, sections=sections,
                        held=list(dict.fromkeys(g.skill for g in ranking.held)), lacking=ranking.lacking,
                        summary_by_code=summary_by_code)
-
-
-def render_chat(guide: GuideResult) -> str:
-    """[64] 채팅 화면 모양: 대화형 답변 + 글에 나온 근거 번호의 출처."""
-    lines = [guide.answer]
-    if guide.sources:
-        lines += ["", "---", "**출처**"]
-        lines += [f"[{e.card_id}] [{e.title}]({e.url}) · {e.source}" for e in guide.sources]
-    return "\n".join(lines)
-
-
-def render_markdown(guide: GuideResult) -> str:
-    """확인용 마크다운 (프론트는 JSON을 그린다)."""
-    lines = [f"# {guide.job_title} 취업 준비 가이드", "", guide.summary, ""]
-    for s in guide.sections:
-        lines.append(f"## {s.slot}")
-        for it in s.items:
-            extra = [x for x in (it.kind, f"{it.grade}학년" if it.grade else None, it.course_type, it.deadline_status) if x]
-            name = it.title if it.title == it.skill else f"{it.title} [{it.skill}]"
-            lines.append(f"{it.rank}. **{name}** ({it.gap}{', ' + ', '.join(extra) if extra else ''})")
-            lines.append(f"   - 할 일: {it.action}")
-            lines.append(f"   - 이유: {it.reason}")
-            for d in it.schedule:
-                lines.append(f"   - 일정: {d}")
-            for n in it.notes:
-                lines.append(f"   - 주의: {n}")
-            for e in it.evidence:
-                lines.append(f"   - [{e.card_id}] \"{' '.join(e.quote.split())}\" — [{e.title}]({e.url}) ({e.source})")
-        lines.append("")
-    if guide.past:
-        lines.append("## 참고: 지난 회차 (다시 열릴 수 있음 — 다음 모집 확인)")
-        lines += [f"- {it.title} ({it.deadline or '이미 끝남'}) — {it.evidence[0].title if it.evidence else ''}" for it in guide.past]
-        lines.append("")
-    if guide.held:
-        lines.append("이미 갖춘 것: " + ", ".join(guide.held))
-    if guide.lacking:
-        lines.append("근거를 찾지 못한 항목: " + ", ".join(guide.lacking))
-    return "\n".join(lines)

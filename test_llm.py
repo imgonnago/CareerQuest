@@ -15,7 +15,7 @@ import traceback
 
 from sqlalchemy import text
 
-from engine.pipeline.answer import render_chat, render_markdown
+from engine.helpers.display import render_chat, render_markdown
 from engine.pipeline.run import run_pipeline
 from engine.schemas.chat import ChatTurn
 from engine.schemas.job import StudentInput

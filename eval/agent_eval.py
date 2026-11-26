@@ -37,7 +37,7 @@ from pydantic import BaseModel
 from engine.llm import LLMConfig, chat, record_usage
 from engine.pipeline.answer import CARD_REF
 from engine.pipeline.run import PipelineResult, run_pipeline
-from engine.pipeline.stage2_evidence import SLOTS
+from engine.pipeline.slots import SLOTS
 from engine.schemas.job import StudentInput
 
 ROOT = Path(__file__).parent

@@ -1459,3 +1459,27 @@ CareerQuest 문제점 · 수정할 부분 목록
   - 제외한 것: 본문이 첨부파일 목록뿐인 공지, 병원 채용 중 제목·본문이 다른 문서, 제목과 본문이 다른 DATAQ 자격 문서(274~279),
           본문에 개설 학과가 없는 타과 개설 과목 행(학과는 raw_metadata에만), 학기 칸이 어긋난 과목 행(1330).
   - 남은 것: feedback/rag_search.py는 아직 rag_questions.json을 읽음. 기존 파일은 지우지 않음(이전 수치 비교용).
+
+[97] stage 파일에 보조 함수가 섞여 단계의 뜻을 읽기 어려움 (해결)
+  - 문제: stage0~5·answer에 글 정리·날짜 읽기·이전 대화 글 같은 보조 함수가 많고, stage끼리 서로의 내부 함수(_norm·tidy·_today·_companies 등)를
+          가져다 씀(stage5→stage2 _norm, answer→stage5 _today·FULL_DATE를 함수 안에서 import 등). 같은 이름이 다른 일을 함
+          (_norm: stage1은 공백·소문자, stage2는 공백·따옴표·말줄임표 / stage3 _key는 stage1 _norm과 같음). stage0은 입력 판단과
+          네 경로의 답변(정보 질문·진로 고민·일반 대화·후속 질문)이 한 파일(746줄).
+  - 해결: 2026-11-26 · 단계 고유 로직은 stage에 두고, 단계와 상관없는 것·여러 단계가 같이 쓰는 것만 옮김. 동작은 바꾸지 않음
+  - 방법: 기준 — stage 파일에는 그 단계의 LLM 호출·LLM 입력 만들기·단계 고유의 판단·검증 규칙(2단계 verify·_accept·apply_caps,
+          5단계 마감일·대상 확인 등)을 남긴다.
+          · engine/helpers/: text(norm_space = 옛 stage1 _norm·stage3 _key, norm_quote = 옛 stage2 _norm, tidy, tidy_lines = 옛 tidy_answer),
+            dates(today_int·term_of·past_terms·today_text·find_dates), checks(ROW_REF·TERM_MISMATCH·HANJA·NUMBER·PHONE·table_companies·clean_phones),
+            school(is_school_doc·course_info·course_key·COURSE_CODE), student(render_student·make_target·render_held), sources(source_label),
+            history(이전 대화·이전 답변 글, SOURCE_QUESTION), display(render_chat·render_markdown)
+          · engine/pipeline/slots.py(SLOTS·ITEM_CAPS·SLOT_PRIORITY·슬롯 세기), evidence_pool.py(EvidencePool), schemas/extraction.py(ExtractionResult·RoundLog)
+          · engine/pipeline/routes/: info·counsel·chat·followup·clarify (옛 stage0의 답변 경로). stage0_route.py에는 입력 판단만
+          · 옮긴 코드는 ast 위치로 원문 그대로 복사하고 이름만 바꿈. 경로마다 쓰던 LLM 설정을 이름만 나눔(답변 검토 REVIEWER,
+            위기 공감 문장 EMPATHY_PICKER, 일반 대화 CHAT_RETRIES — 값은 그대로). 쓰는 곳이 없던 lacking_slots·CRISIS_NUMBERS는 지움
+          · stage끼리 남은 import는 단계 함수뿐(stage4→stage5 verify_slot·check_ranks). 순환 import 없음
+  - 확인: 옛 코드(백업 브랜치 backup/before-helpers-20261126)와 새 코드를 따로 불러 함수·상수 365개의 바이트코드·상수·참조하는 전역 값을
+          대조 — 347개 같음. 나머지는 의도한 차이(tidy_lines로 바꾼 3곳, 함수 안 import를 뺀 2곳, docstring 2곳)와
+          import한 이름의 메서드 호출 형식(LOAD_GLOBAL NULL+X / LOAD_ATTR method — 파이썬 컴파일러 차이, 동작 같음)뿐.
+          pyflakes 통과, backend·eval·test_llm import 됨. 실제 실행(Ollama·통합 DB): 일반 대화·정보 질문(출처 2)·진로 고민·위기·되묻기
+          5경로 정상. 취업 가이드 1~5단계·후속 질문은 시간이 없어 중간에 멈춤 — 아직 안 돌려 봄.
+  - 서버에 저장소 밖 스크립트가 옛 위치(예: stage5_verify.tidy, stage2_evidence.make_target, answer.render_chat)를 import하면 새 위치로 바꿀 것.

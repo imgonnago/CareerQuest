@@ -22,7 +22,7 @@ class CardDraft(BaseModel):
     item: str = Field(description="quote가 요구하는 자격증·기술·조건 또는 과목·프로그램·공모전·프로젝트의 짧은 이름. 공고 직무명·기업명 금지. 예: 정보처리기사, Spring Boot, TOEIC Speaking 120, 로봇공학개론")
     category: Category
     company: str | None = Field(default=None, description="문서에 나온 기업명. 없으면 null")
-    # [54] 교과목의 개설 학년·교양/전공은 LLM에 받지 않고 코드가 원문 표에서 읽는다 (stage2_evidence.course_info).
+    # [54] 교과목의 개설 학년·교양/전공은 LLM에 받지 않고 코드가 원문 표에서 읽는다 (helpers/school.course_info).
     # LLM 칸으로 받아 보니 기본값을 두면 안 쓰고(15과목 모두 null), 필수로 하면 학점 칸을 학년으로 읽고(4학년 → 3)
     # 카드마다 출력이 늘어 읽기 출력 상한에 걸림
 
